@@ -2,7 +2,7 @@
 import React from "react";
 
 interface DashboardStatCardProps {
-  title: string;
+  title: React.ReactNode; // 🔥 Accept React.ReactNode for flexibility
   value: React.ReactNode;
   loading?: boolean;
   color?: string;

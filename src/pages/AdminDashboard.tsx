@@ -1,63 +1,19 @@
+
 import { useMemo } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import ProductTable from "@/components/ProductTable";
 import SalesTable from "@/components/SalesTable";
 import LowStockAlert from "@/components/LowStockAlert";
 import SalesChart from "@/components/SalesChart";
-import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
-import { toast } from "@/components/ui/sonner";
-// 👇 Import the Sale type as SaleTableRow to avoid collision
-import type { default as SalesTableComponent } from "@/components/SalesTable";
-type SaleTableRow = Parameters<typeof SalesTableComponent>[0]["sales"][number];
-
-// Type definitions matching your database
-type Product = {
-  id: string;
-  name: string;
-  category: string;
-  unit: string;
-  price: number;
-  stock: number;
-  low_stock_threshold: number;
-  status: "active" | "inactive";
-  created_at?: string | null;
-  updated_at?: string | null;
-};
-
-type Sale = {
-  id: string;
-  product_id: string;
-  product_name: string;
-  quantity: number;
-  total: number;
-  operator_id: string;
-  operator_name: string;
-  date: string;
-  created_at: string | null;
-};
-
-// Add this type for mapping to SalesTable
-type SaleForTable = {
-  id: number;
-  productId: number;
-  productName: string;
-  quantity: number;
-  total: number;
-  operator: string;
-  date: string;
-};
-
+import { useDashboardData } from "@/hooks/useDashboardData";
 import CategoryStatsCard from "@/components/dashboard/CategoryStatsCard";
 import DashboardStatCard from "@/components/dashboard/DashboardStatCard";
-import { useDashboardData } from "@/hooks/useDashboardData";
 
 export default function AdminDashboard() {
   const {
     products,
     productsLoading,
     productsError,
-    sales,
     salesLoading,
     salesError,
     todaySales,
@@ -109,7 +65,7 @@ export default function AdminDashboard() {
           </DashboardStatCard>
         </div>
         <div className="mb-10">
-          <SalesChart sales={sales} />
+          <SalesChart sales={[]} />
         </div>
         <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
