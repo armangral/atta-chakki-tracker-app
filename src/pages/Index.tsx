@@ -1,9 +1,32 @@
-
 import { useNavigate } from "react-router-dom";
 import { Book, CalendarDays, ArrowUp, ArrowDown, Search } from "lucide-react";
 
 const Index = () => {
   const navigate = useNavigate();
+
+  // Helper to decide admin button routing (checks auth+admin role)
+  async function handleAdminClick() {
+    // Check if user is logged in
+    const { data: { session } } = await import('@/integrations/supabase/client').then(m => m.supabase.auth.getSession());
+    if (!session) {
+      navigate("/login");
+      return;
+    }
+    // Check if has admin role
+    const supabase = (await import('@/integrations/supabase/client')).supabase;
+    const { data, error } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", session.user.id)
+      .eq("role", "admin")
+      .single();
+    if (!error && data && data.role === "admin") {
+      navigate("/admin");
+    } else {
+      // Not an admin — send to login (or show message)
+      navigate("/login");
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-amber-50 via-white to-emerald-50 py-16">
@@ -18,7 +41,7 @@ const Index = () => {
         </p>
         <div className="flex flex-col md:flex-row gap-6 mb-8">
           <button
-            onClick={() => navigate("/admin")}
+            onClick={handleAdminClick}
             className="flex items-center gap-3 px-6 py-3 rounded-lg bg-amber-600 text-white font-semibold text-lg shadow-md hover:bg-amber-700 transition focus:ring-2 ring-amber-400"
           >
             <Book size={24} /> Admin Panel
