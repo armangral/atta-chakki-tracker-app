@@ -4,6 +4,7 @@ import MainHeader from "@/components/Layout/MainHeader";
 import ProductTable from "@/components/ProductTable";
 import SalesTable from "@/components/SalesTable";
 import LowStockAlert from "@/components/LowStockAlert";
+import SalesChart from "@/components/SalesChart";
 
 const MOCK_PRODUCTS = [
   { id: 1, name: "Sharbati Wheat Atta", category: "Flour", unit: "Kg", price: 42, stock: 14, lowStockThreshold: 15 },
@@ -44,6 +45,9 @@ export default function AdminDashboard() {
             <LowStockAlert products={lowStockProducts} />
           </div>
         </div>
+        <div className="mb-10">
+          <SalesChart sales={sales} />
+        </div>
         <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
             <ProductTable products={products} />
@@ -56,3 +60,4 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
