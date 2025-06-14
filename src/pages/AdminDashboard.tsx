@@ -34,6 +34,17 @@ type Sale = {
   created_at: string | null;
 };
 
+// Add this type for mapping to SalesTable
+type SaleForTable = {
+  id: number;
+  productId: number;
+  productName: string;
+  quantity: number;
+  total: number;
+  operator: string;
+  date: string;
+};
+
 export default function AdminDashboard() {
   // Fetch products from Supabase
   const {
@@ -111,8 +122,8 @@ export default function AdminDashboard() {
     return categoryAgg;
   }, [todaySalesList, products]);
 
-  // 🎯 Fix: Map sales fields for SalesTable (for UI table)
-  const salesForTable = sales.map((s) => ({
+  // 🎯 Map sales fields for SalesTable (for UI table)
+  const salesForTable: SaleForTable[] = sales.map((s) => ({
     id: typeof s.id === "string" ? Math.abs(
       parseInt(s.id.replace(/-/g, "").slice(0, 8), 16)
     ) : Number(s.id),
