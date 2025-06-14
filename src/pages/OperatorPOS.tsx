@@ -1,8 +1,13 @@
-import { useState, useMemo, useRef } from "react";
+
+import { useState } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import { toast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
-import { Search, Printer } from "lucide-react";
+import { Search } from "lucide-react";
+import OperatorProductGrid from "./OperatorProductGrid";
+import OperatorSaleInput from "./OperatorSaleInput";
+import OperatorSalesLog from "./OperatorSalesLog";
+import { getBillHtml } from "./posBillTemplates";
 
 const MOCK_PRODUCTS = [
   { id: 1, name: "Sharbati Wheat Atta", price: 42, stock: 95, unit: "Kg", category: "Flour" },
@@ -11,7 +16,8 @@ const MOCK_PRODUCTS = [
   // ... more products
 ];
 
-type Sale = {
+export type Product = typeof MOCK_PRODUCTS[number];
+export type Sale = {
   productId: number;
   productName: string;
   quantity: number;
@@ -28,45 +34,6 @@ export default function OperatorPOS() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [search, setSearch] = useState("");
   const [lastSale, setLastSale] = useState<Sale | null>(null);
-  const billRef = useRef<HTMLDivElement>(null);
-
-  // Improved: Generate POS bill HTML for 58/80mm thermal printers (max 56mm/212px)
-  const getBillHtml = (sale: Sale) => {
-    const product = products.find((p) => p.id === sale.productId);
-    return `
-      <div style="width:212px;max-width:100vw;margin:0 auto;padding-top:6px;font-family:monospace;background:white;">
-        <div style="text-align:center;">
-          <!-- You can add a logo here if you use an image, for now just show the name super bold/large -->
-          <div style="font-size:16px;font-weight:800;letter-spacing:1px;white-space:break-spaces;">Punjab Atta Chakki</div>
-          <div style="font-size:10px;font-weight:400;">Main Street, Punjab</div>
-          <div style="font-size:10px;font-weight:400;">Mob: +92-XXXXXXXXX</div>
-          <div style="margin:6px 0 6px 0;border-bottom:1px dashed #333;">&nbsp;</div>
-          <div style="font-size:11px;margin-bottom:3px;font-weight:500;">Sale Receipt</div>
-        </div>
-        <div style="font-size:11px;font-weight:700;display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
-            <span style="text-align:left;">Item</span>
-            <span style="text-align:right;">Qty</span>
-        </div>
-        <div style="font-size:11px;display:flex;justify-content:space-between;">
-            <span style="max-width:70px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sale.productName}</span>
-            <span style="text-align:right;">${sale.quantity} ${product?.unit}</span>
-        </div>
-        <div style="font-size:10px;margin:3px 0;">
-            Rate: ₨${sale.price.toLocaleString()} x ${sale.quantity} = <b>₨${sale.total.toLocaleString()}</b>
-        </div>
-        <div style="margin:6px 0 6px 0;border-bottom:1px dashed #333;">&nbsp;</div>
-        <div style="font-size:10px;">
-            <b>Date:</b> ${sale.date}
-        </div>
-        <div style="margin-top:8px;text-align:center;font-size:12px;font-weight:700;">
-          Thank You
-        </div>
-        <div style="text-align:center;font-size:10px;font-weight:500;margin-top:5px;">
-          Powered by Punjab Atta Chakki POS
-        </div>
-      </div>
-    `;
-  };
 
   const handleProductClick = (id: number) => {
     setSelected(id);
@@ -115,9 +82,9 @@ export default function OperatorPOS() {
     });
   };
 
-  // Print bill for any sale (not only last one!)
+  // Print bill for any sale
   const handlePrintBill = (sale: Sale) => {
-    const billContents = getBillHtml(sale);
+    const billContents = getBillHtml(sale, products);
     if (!billContents) return;
     const printWindow = window.open("", "", "width=275,height=500");
     if (printWindow) {
@@ -126,7 +93,7 @@ export default function OperatorPOS() {
           <head>
             <title>BILL - Punjab Atta Chakki</title>
             <style>
-              body { margin:0; font-family: 'Courier New', Courier, monospace; width: 210px;}
+              body { margin:0; font-family: 'Courier New', Courier, monospace; width: 212px;}
             </style>
           </head>
           <body>
@@ -143,12 +110,12 @@ export default function OperatorPOS() {
     }
   };
 
-  const filteredProducts = useMemo(() => {
-    if (!search.trim()) return products;
-    return products.filter((prod) =>
-      prod.name.toLowerCase().includes(search.trim().toLowerCase())
-    );
-  }, [search, products]);
+  // Filtered products logic (used in product grid)
+  const filteredProducts = !search.trim()
+    ? products
+    : products.filter((prod) =>
+        prod.name.toLowerCase().includes(search.trim().toLowerCase())
+      );
 
   return (
     <div className="min-h-screen bg-gradient-to-r from-emerald-50 via-white to-amber-50 pb-20 flex flex-col">
@@ -162,7 +129,6 @@ export default function OperatorPOS() {
               Select a product and confirm sale.
             </div>
           </div>
-          {/* Product search bar */}
           <div className="w-full md:w-96">
             <div className="relative">
               <Input
@@ -181,58 +147,20 @@ export default function OperatorPOS() {
         </div>
 
         {/* Product grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-8 animate-fade-in">
-          {filteredProducts.length === 0 ? (
-            <div className="col-span-full text-center text-lg text-gray-400 py-10">
-              No matching products found.
-            </div>
-          ) : (
-            filteredProducts.map((prod) => (
-              <button
-                key={prod.id}
-                className={
-                  `rounded-xl shadow hover-scale border border-gray-100 bg-white hover:bg-emerald-50 flex flex-col items-center justify-center py-7 px-3 font-semibold text-lg relative group transition-all duration-150 
-                  ${selected === prod.id ? "ring-2 ring-emerald-500 bg-emerald-50" : ""}`
-                }
-                onClick={() => handleProductClick(prod.id)}
-                tabIndex={0}
-              >
-                <span className="group-hover:text-emerald-700">{prod.name}</span>
-                <span className="block mt-1 text-sm text-gray-500 font-normal">{`₨${prod.price}/${prod.unit}`}</span>
-                <span className="absolute top-2 right-4 text-xs bg-amber-100 text-amber-700 rounded-full px-2 font-semibold shadow">
-                  {prod.stock} {prod.unit}
-                </span>
-                <span className="absolute bottom-2 right-4 text-xs bg-emerald-100 text-emerald-700 rounded-full px-2 font-medium">
-                  {prod.category}
-                </span>
-              </button>
-            ))
-          )}
-        </div>
+        <OperatorProductGrid
+          products={filteredProducts}
+          selected={selected}
+          onProductClick={handleProductClick}
+        />
 
         {/* Selected and quantity */}
         {selected && (
-          <div className="my-6 flex flex-col md:flex-row md:items-center gap-4 border rounded-lg p-6 bg-white shadow animate-fade-in">
-            <div className="font-semibold text-lg flex-1">
-              {products.find((p) => p.id === selected)?.name}
-            </div>
-            <Input
-              className="border-gray-300 rounded px-4 py-2 w-24 text-lg font-semibold focus:ring-amber-500"
-              type="number"
-              autoFocus
-              step={0.1}
-              min={0}
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              placeholder="Qty"
-            />
-            <button
-              onClick={handleConfirm}
-              className="ml-0 md:ml-4 px-6 py-2 rounded-lg bg-emerald-600 text-white font-bold text-lg hover:bg-emerald-700 transition-shadow"
-            >
-              Confirm Sale
-            </button>
-          </div>
+          <OperatorSaleInput
+            product={products.find((p) => p.id === selected)!}
+            quantity={quantity}
+            setQuantity={setQuantity}
+            onConfirm={handleConfirm}
+          />
         )}
 
         {/* POS Bill + Print Button for last sale */}
@@ -242,55 +170,15 @@ export default function OperatorPOS() {
               onClick={() => handlePrintBill(lastSale)}
               className="px-6 py-2 rounded-lg bg-amber-500 text-white font-bold text-lg hover:bg-amber-600 transition-shadow flex items-center gap-2"
             >
-              <Printer size={20} /> Print Bill
+              {/* Use <Printer size={20} /> here if needed */}
+              Print Bill
             </button>
             <span className="text-xs text-muted-foreground">For physical receipt/printer.</span>
           </div>
         )}
 
         {/* Sales log table */}
-        {sales.length > 0 && (
-          <div className="mt-12 animate-fade-in">
-            <div className="text-lg font-semibold mb-2">Today's Sales (This device)</div>
-            <div className="w-full overflow-x-auto">
-              <table className="w-full border rounded-md overflow-hidden bg-white text-sm">
-                <thead className="bg-emerald-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-700 text-xs">Time</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-700 text-xs">Product</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-700 text-xs">Category</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-700 text-xs">Qty</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-700 text-xs">Total</th>
-                    <th className="px-3 py-2 text-center font-semibold text-gray-700 text-xs">Bill</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sales.map((sale) => (
-                    <tr key={sale.date + sale.productId}>
-                      <td className="px-3 py-2">{sale.date}</td>
-                      <td className="px-3 py-2">{sale.productName}</td>
-                      <td className="px-3 py-2">{sale.category}</td>
-                      <td className="px-3 py-2 text-right">{sale.quantity}</td>
-                      <td className="px-3 py-2 text-right">₨{sale.total}</td>
-                      <td className="px-3 py-2 text-center">
-                        <button
-                          title="Print Bill"
-                          onClick={() => handlePrintBill(sale)}
-                          className="inline-flex items-center gap-1 px-3 py-1 rounded text-xs font-bold bg-amber-100 text-amber-700 hover:bg-amber-200 transition"
-                        >
-                          <Printer size={16} /> Print
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="text-emerald-600 mt-2">
-              <span className="font-bold">Total: ₨{sales.reduce((a, s) => a + s.total, 0)}</span>
-            </div>
-          </div>
-        )}
+        <OperatorSalesLog sales={sales} onPrintBill={handlePrintBill} />
       </div>
     </div>
   );
