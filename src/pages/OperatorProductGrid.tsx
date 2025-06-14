@@ -1,14 +1,23 @@
 
 import React from "react";
-import { Product } from "./OperatorPOS";
+import { Product } from "./operatorPOS.types";
 
 type Props = {
   products: Product[];
-  selected: number | null;
-  onProductClick: (id: number) => void;
+  selected: string | null;
+  onProductClick: (id: string) => void;
+  loading?: boolean;
 };
 
-export default function OperatorProductGrid({ products, selected, onProductClick }: Props) {
+export default function OperatorProductGrid({ products, selected, onProductClick, loading }: Props) {
+  if (loading) {
+    return (
+      <div className="col-span-full text-center text-lg text-gray-400 py-10">
+        Loading products...
+      </div>
+    );
+  }
+
   if (products.length === 0)
     return (
       <div className="col-span-full text-center text-lg text-gray-400 py-10">

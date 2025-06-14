@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import { toast } from "@/hooks/use-toast";
@@ -11,27 +10,7 @@ import { getBillHtml } from "./posBillTemplates";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import RequireOperator from "@/components/Auth/RequireOperator";
-
-// Backend types
-type Product = {
-  id: string;
-  name: string;
-  price: number;
-  stock: number;
-  unit: string;
-  category: string;
-};
-
-type Sale = {
-  id: string;
-  product_id: string;
-  product_name: string;
-  quantity: number;
-  total: number;
-  operator_id: string;
-  operator_name: string;
-  date: string;
-};
+import { Product, Sale } from "./operatorPOS.types"; // new
 
 export default function OperatorPOS() {
   const queryClient = useQueryClient();

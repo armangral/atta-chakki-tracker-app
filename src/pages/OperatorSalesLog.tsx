@@ -1,14 +1,20 @@
 
 import React from "react";
 import { Printer } from "lucide-react";
-import { Sale } from "./OperatorPOS";
+import { Sale } from "./operatorPOS.types";
 
 type Props = {
   sales: Sale[];
   onPrintBill: (sale: Sale) => void;
+  loading?: boolean;
 };
 
-export default function OperatorSalesLog({ sales, onPrintBill }: Props) {
+export default function OperatorSalesLog({ sales, onPrintBill, loading }: Props) {
+  if (loading) {
+    return (
+      <div className="mt-12 animate-fade-in text-center text-gray-500">Loading sales...</div>
+    );
+  }
   if (sales.length === 0) return null;
 
   return (
@@ -28,10 +34,12 @@ export default function OperatorSalesLog({ sales, onPrintBill }: Props) {
           </thead>
           <tbody>
             {sales.map((sale) => (
-              <tr key={sale.date + sale.productId}>
+              <tr key={sale.date + sale.product_id}>
                 <td className="px-3 py-2">{sale.date}</td>
-                <td className="px-3 py-2">{sale.productName}</td>
-                <td className="px-3 py-2">{sale.category}</td>
+                <td className="px-3 py-2">{sale.product_name}</td>
+                <td className="px-3 py-2">{/* We'll need the category from elsewhere or skip if unavailable */}
+                    {/* Not available on Sale. You may want to pass this as an extra prop or denormalize future. For now, skip or leave blank */}
+                </td>
                 <td className="px-3 py-2 text-right">{sale.quantity}</td>
                 <td className="px-3 py-2 text-right">₨{sale.total}</td>
                 <td className="px-3 py-2 text-center">
@@ -50,7 +58,7 @@ export default function OperatorSalesLog({ sales, onPrintBill }: Props) {
       </div>
       <div className="text-emerald-600 mt-2">
         <span className="font-bold">
-          Total: ₨{sales.reduce((a, s) => a + s.total, 0)}
+          Total: ₨{sales.reduce((a, s) => a + Number(s.total), 0)}
         </span>
       </div>
     </div>
