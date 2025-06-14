@@ -6,11 +6,12 @@ import SalesTable from "@/components/SalesTable";
 import LowStockAlert from "@/components/LowStockAlert";
 import SalesChart from "@/components/SalesChart";
 
-// FIXED: Product type fields and property names match ProductTable definition
+// FIXED: Product type fields and property names match ProductTable AND LowStockAlert definitions
 const MOCK_PRODUCTS = [
-  { id: "1", name: "Sharbati Wheat Atta", category: "Flour", unit: "Kg", price: 42, stock: 14, low_stock_threshold: 15, status: "active" },
-  { id: "2", name: "Besan", category: "Flour", unit: "Kg", price: 80, stock: 40, low_stock_threshold: 10, status: "active" },
-  { id: "3", name: "Turmeric Powder", category: "Spices", unit: "Kg", price: 310, stock: 5, low_stock_threshold: 8, status: "inactive" },
+  // lowStockThreshold camelCase to match ProductTable + LowStockAlert
+  { id: "1", name: "Sharbati Wheat Atta", category: "Flour", unit: "Kg", price: 42, stock: 14, lowStockThreshold: 15, status: "active" as const },
+  { id: "2", name: "Besan", category: "Flour", unit: "Kg", price: 80, stock: 40, lowStockThreshold: 10, status: "active" as const },
+  { id: "3", name: "Turmeric Powder", category: "Spices", unit: "Kg", price: 310, stock: 5, lowStockThreshold: 8, status: "inactive" as const },
 ];
 
 const MOCK_SALES = [
@@ -26,7 +27,7 @@ export default function AdminDashboard() {
   const todayKg = sales.reduce((acc, s) => acc + s.quantity, 0);
 
   const lowStockProducts = products.filter(
-    (p) => p.stock < p.low_stock_threshold
+    (p) => p.stock < p.lowStockThreshold
   );
 
   // Per-category breakdown (for today's sales only)
