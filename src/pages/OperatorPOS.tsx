@@ -150,22 +150,6 @@ export default function OperatorPOS() {
     );
   }, [search, products]);
 
-  const categoryAggregates = useMemo(() => {
-    const categories = Array.from(new Set(products.map((p) => p.category)));
-    const result: { [category: string]: { totalAmount: number; totalQty: number } } = {};
-    for (const cat of categories) {
-      result[cat] = { totalAmount: 0, totalQty: 0 };
-    }
-    for (const sale of sales) {
-      if (!result[sale.category]) {
-        result[sale.category] = { totalAmount: 0, totalQty: 0 };
-      }
-      result[sale.category].totalAmount += sale.total;
-      result[sale.category].totalQty += sale.quantity;
-    }
-    return result;
-  }, [sales, products]);
-
   return (
     <div className="min-h-screen bg-gradient-to-r from-emerald-50 via-white to-amber-50 pb-20 flex flex-col">
       <MainHeader userRole="operator" />
@@ -194,21 +178,6 @@ export default function OperatorPOS() {
               />
             </div>
           </div>
-        </div>
-
-        {/* Category sales summary */}
-        <div className="mb-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 animate-fade-in">
-          {Object.entries(categoryAggregates).map(([cat, agg]) => (
-            <div
-              key={cat}
-              className="flex flex-col items-start p-4 rounded-lg shadow border bg-white"
-            >
-              <span className="text-sm font-medium text-gray-500">{cat}</span>
-              <span className="text-lg font-bold text-emerald-700">
-                ₨{agg.totalAmount.toLocaleString()} &middot; {agg.totalQty} units
-              </span>
-            </div>
-          ))}
         </div>
 
         {/* Product grid */}
