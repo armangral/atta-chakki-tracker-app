@@ -48,99 +48,26 @@ type SaleForTable = {
   date: string;
 };
 
+import CategoryStatsCard from "@/components/dashboard/CategoryStatsCard";
+import DashboardStatCard from "@/components/dashboard/DashboardStatCard";
+import { useDashboardData } from "@/hooks/useDashboardData";
+
 export default function AdminDashboard() {
-  // Fetch products from Supabase
   const {
-    data: products = [],
-    isLoading: productsLoading,
-    error: productsError,
-  } = useQuery({
-    queryKey: ["products"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []).map((p) => ({
-        ...p,
-        status: p.status === "active" ? "active" : "inactive",
-      })) as Product[];
-    }
-  });
+    products,
+    productsLoading,
+    productsError,
+    sales,
+    salesLoading,
+    salesError,
+    todaySales,
+    todayKg,
+    lowStockProducts,
+    categoryStats,
+    salesForTable,
+  } = useDashboardData();
 
-  // Fetch sales from Supabase
-  const {
-    data: sales = [],
-    isLoading: salesLoading,
-    error: salesError,
-  } = useQuery({
-    queryKey: ["sales"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sales")
-        .select("*")
-        .order("date", { ascending: false });
-      if (error) throw error;
-      return data as Sale[];
-    }
-  });
-
-  // Totals/statistics for today (using sales)
-  // Use system date for "today" filtering
-  const today = new Date().toISOString().slice(0, 10);
-  const todaySalesList = sales.filter((s) =>
-    s.date && s.date.slice(0, 10) === today
-  );
-
-  const todaySales = todaySalesList.reduce((acc, s) => acc + (typeof s.total === 'number' ? s.total : 0), 0);
-  const todayKg = todaySalesList.reduce((acc, s) => acc + (typeof s.quantity === 'number' ? s.quantity : 0), 0);
-
-  // ProductTable expects: ... low_stock_threshold ...
-  // LowStockAlert expects: id: number, lowStockThreshold: number, unit, name, stock
-  const lowStockProducts = products
-    .filter((p) => p.stock < p.low_stock_threshold)
-    .map((p) => ({
-      id: Number(typeof p.id === "string" ? p.id.replace(/-/g, "").slice(0, 8) : p.id), // fallback for uuid num values, unique
-      name: p.name,
-      unit: p.unit,
-      stock: p.stock,
-      lowStockThreshold: p.low_stock_threshold,
-    }));
-
-  // Per-category breakdown (for today's sales)
-  const categoryStats = useMemo(() => {
-    // Map from productId to category (productId is string)
-    const idToCategory: Record<string, string> = {};
-    products.forEach((p) => { idToCategory[p.id] = p.category; });
-
-    // Aggregate sales for today per-category
-    const categoryAgg: Record<string, { total: number; quantity: number; }> = {};
-    todaySalesList.forEach((sale) => {
-      const cat = idToCategory[sale.product_id] || "Other";
-      if (!categoryAgg[cat]) categoryAgg[cat] = { total: 0, quantity: 0 };
-      categoryAgg[cat].total += typeof sale.total === "number" ? sale.total : 0;
-      categoryAgg[cat].quantity += typeof sale.quantity === "number" ? sale.quantity : 0;
-    });
-    return categoryAgg;
-  }, [todaySalesList, products]);
-
-  // 🎯 Map sales fields for SalesTable (for UI table)
-  const salesForTable: SaleTableRow[] = sales.map((s) => ({
-    id: typeof s.id === "string" ? Math.abs(
-      parseInt(s.id.replace(/-/g, "").slice(0, 8), 16)
-    ) : Number(s.id),
-    productId: typeof s.product_id === "string" ? Math.abs(
-      parseInt(s.product_id.replace(/-/g, "").slice(0, 8), 16)
-    ) : Number(s.product_id),
-    productName: s.product_name,
-    quantity: Number(s.quantity),
-    total: Number(s.total),
-    operator: s.operator_name,
-    date: s.date ? new Date(s.date).toLocaleString() : "",
-  }));
-
-  // Edit/Delete handlers are not functional here -- handled on /AdminProducts
+  // Handlers
   const handleEdit = () => {};
   const handleDelete = () => {};
 
@@ -156,39 +83,30 @@ export default function AdminDashboard() {
           </div>
         )}
         {/* Per-category sales summary */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-          {Object.entries(categoryStats).map(([category, stat]) => (
-            <div
-              key={category}
-              className="flex flex-col items-start p-4 rounded-xl shadow border bg-white"
-            >
-              <span className="text-md font-semibold text-gray-500">{category}</span>
-              <span className="text-lg font-bold text-emerald-700">
-                ₨{stat.total.toLocaleString()} &middot; {stat.quantity} units
-              </span>
-            </div>
-          ))}
-        </div>
+        <CategoryStatsCard
+          stats={Object.entries(categoryStats).map(([category, stat]) => ({
+            category,
+            total: stat.total,
+            quantity: stat.quantity,
+          }))}
+        />
+
+        {/* Top stats */}
         <div className="flex flex-wrap gap-6 mb-8">
-          <div className="flex-1 rounded-xl shadow-md border border-gray-100 p-6 bg-white min-w-[230px]">
-            <div className="text-gray-600 font-medium">Total Sales (Today)</div>
-            {salesLoading ? (
-              <div className="text-xl text-gray-400 mt-1">Loading...</div>
-            ) : (
-              <div className="text-3xl font-extrabold text-emerald-700 mt-1">₨{todaySales}</div>
-            )}
-          </div>
-          <div className="flex-1 rounded-xl shadow-md border border-gray-100 p-6 bg-white min-w-[230px]">
-            <div className="text-gray-600 font-medium">Qty Sold (Today)</div>
-            {salesLoading ? (
-              <div className="text-xl text-gray-400 mt-1">Loading...</div>
-            ) : (
-              <div className="text-3xl font-extrabold text-gray-800 mt-1">{todayKg} Kg</div>
-            )}
-          </div>
-          <div className="flex-1 rounded-xl shadow-md border border-gray-100 p-6 bg-white min-w-[230px]">
+          <DashboardStatCard
+            title="Total Sales (Today)"
+            value={`₨${todaySales}`}
+            loading={salesLoading}
+            color="text-emerald-700"
+          />
+          <DashboardStatCard
+            title="Qty Sold (Today)"
+            value={`${todayKg} Kg`}
+            loading={salesLoading}
+          />
+          <DashboardStatCard title={<span className="text-red-700">Low Stock</span>}>
             <LowStockAlert products={lowStockProducts} />
-          </div>
+          </DashboardStatCard>
         </div>
         <div className="mb-10">
           <SalesChart sales={sales} />
@@ -204,7 +122,6 @@ export default function AdminDashboard() {
             />
           </div>
           <div>
-            {/* 🎯 Pass mapped array to SalesTable */}
             <SalesTable sales={salesForTable} />
           </div>
         </div>
