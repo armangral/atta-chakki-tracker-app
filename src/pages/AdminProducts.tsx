@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Plus, Edit, Trash2, Search } from "lucide-react";
 import BackButton from "@/components/BackButton";
+import MainHeader from "@/components/Layout/MainHeader";
 import {
   Dialog,
   DialogTrigger,
@@ -174,7 +175,8 @@ export default function AdminProducts() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-emerald-50 pb-20">
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-emerald-50">
+      <MainHeader userRole="admin" />
       <div className="max-w-5xl mx-auto px-4 py-10">
         <BackButton />
         <div className="flex justify-between items-center mb-8 flex-wrap gap-4">

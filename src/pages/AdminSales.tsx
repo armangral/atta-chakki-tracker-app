@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import BackButton from "@/components/BackButton";
+import MainHeader from "@/components/Layout/MainHeader";
 
 const MOCK_PRODUCTS = [
   { id: 1, name: "Sharbati Wheat Atta" },
@@ -89,7 +90,8 @@ export default function AdminSales() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-emerald-50 pb-20">
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-emerald-50">
+      <MainHeader userRole="admin" />
       <div className="max-w-6xl mx-auto px-4 pt-10">
         <BackButton />
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
