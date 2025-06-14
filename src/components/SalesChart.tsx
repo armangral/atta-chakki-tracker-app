@@ -60,14 +60,14 @@ export default function SalesChart({ sales }: SalesChartProps) {
       const d = new Date(sale.date.replace(" ", "T")); // local time
       const key = getPeriodKey(d, mode);
       if (!group[key]) {
-        group[key] = { label: getBarLabel(key, mode), total: 0, quantity: 0 };
+        group[key] = { label: getBarLabel(key as string, mode), total: 0, quantity: 0 };
       }
       group[key].total += sale.total;
       group[key].quantity += sale.quantity;
     }
-    // Sort by key
+    // Sort by key (force both keys to string for localeCompare)
     return Object.entries(group)
-      .sort(([k1], [k2]) => k1.localeCompare(k2))
+      .sort(([k1], [k2]) => String(k1).localeCompare(String(k2)))
       .map(([, val]) => val);
   }, [sales, mode]);
 
