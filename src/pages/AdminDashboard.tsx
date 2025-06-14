@@ -1,4 +1,3 @@
-
 import { useMemo } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import ProductTable from "@/components/ProductTable";
@@ -112,6 +111,21 @@ export default function AdminDashboard() {
     return categoryAgg;
   }, [todaySalesList, products]);
 
+  // 🎯 Fix: Map sales fields for SalesTable (for UI table)
+  const salesForTable = sales.map((s) => ({
+    id: typeof s.id === "string" ? Math.abs(
+      parseInt(s.id.replace(/-/g, "").slice(0, 8), 16)
+    ) : Number(s.id),
+    productId: typeof s.product_id === "string" ? Math.abs(
+      parseInt(s.product_id.replace(/-/g, "").slice(0, 8), 16)
+    ) : Number(s.product_id),
+    productName: s.product_name,
+    quantity: Number(s.quantity),
+    total: Number(s.total),
+    operator: s.operator_name,
+    date: s.date ? new Date(s.date).toLocaleString() : "",
+  }));
+
   // Edit/Delete handlers are not functional here -- handled on /AdminProducts
   const handleEdit = () => {};
   const handleDelete = () => {};
@@ -176,7 +190,8 @@ export default function AdminDashboard() {
             />
           </div>
           <div>
-            <SalesTable sales={sales} />
+            {/* 🎯 Pass mapped array to SalesTable */}
+            <SalesTable sales={salesForTable} />
           </div>
         </div>
       </div>
