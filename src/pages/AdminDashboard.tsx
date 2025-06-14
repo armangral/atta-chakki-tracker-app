@@ -1,4 +1,3 @@
-
 import { useMemo } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import ProductTable from "@/components/ProductTable";
@@ -60,7 +59,10 @@ export default function AdminDashboard() {
             value={`${todayKg} Kg`}
             loading={salesLoading}
           />
-          <DashboardStatCard title={<span className="text-red-700">Low Stock</span>}>
+          <DashboardStatCard
+            title={<span className="text-red-700">Low Stock</span>}
+            value=""
+          >
             <LowStockAlert products={lowStockProducts} />
           </DashboardStatCard>
         </div>
