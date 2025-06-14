@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
@@ -6,43 +7,80 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import BackButton from "@/components/BackButton";
 import MainHeader from "@/components/Layout/MainHeader";
-
-const MOCK_PRODUCTS = [
-  { id: 1, name: "Sharbati Wheat Atta" },
-  { id: 2, name: "Besan" },
-  { id: 3, name: "Turmeric Powder" },
-];
-
-const MOCK_OPERATORS = [
-  { id: 1, name: "operator1" },
-  { id: 2, name: "operator2" },
-];
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 type Sale = {
-  id: number;
-  productId: number;
-  productName: string;
+  id: string;
+  product_id: string;
+  product_name: string;
   quantity: number;
   total: number;
-  operator: string;
+  operator_id: string;
+  operator_name: string;
   date: string;
+  created_at: string | null;
 };
 
-const INITIAL_SALES: Sale[] = [
-  { id: 1, productId: 1, productName: "Sharbati Wheat Atta", quantity: 5, total: 210, operator: "operator1", date: "2025-06-14 09:30" },
-  { id: 2, productId: 2, productName: "Besan", quantity: 2.5, total: 200, operator: "operator2", date: "2025-06-14 10:05" }
-];
+type Product = {
+  id: string;
+  name: string;
+};
+
+type Operator = {
+  id: string;
+  username: string | null;
+};
 
 export default function AdminSales() {
-  const [sales, setSales] = useState<Sale[]>(INITIAL_SALES);
   const [isOpen, setIsOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Fetch products for select dropdown
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id,name")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return data as Product[];
+    }
+  });
+
+  // Fetch operators for select dropdown
+  const { data: operators = [], isLoading: operatorsLoading } = useQuery({
+    queryKey: ["profiles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id,username")
+        .order("username", { ascending: true });
+      if (error) throw error;
+      return data as Operator[];
+    }
+  });
+
+  // Fetch all sales
+  const { data: sales = [], isLoading: salesLoading, error: salesError } = useQuery({
+    queryKey: ["sales"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sales")
+        .select("*")
+        .order("date", { ascending: false });
+      if (error) throw error;
+      return data as Sale[];
+    }
+  });
 
   // Add Sale form state
   const [form, setForm] = useState({
-    productId: "",
+    product_id: "",
     quantity: "",
     total: "",
-    operator: "",
+    operator_id: "",
     date: "",
   });
 
@@ -51,42 +89,71 @@ export default function AdminSales() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+  // Add sale mutation
+  const addSaleMutation = useMutation({
+    mutationFn: async (formData: typeof form) => {
+      const product = products.find(p => p.id === formData.product_id);
+      const operator = operators.find(o => o.id === formData.operator_id);
+
+      if (!product || !operator) throw new Error("Invalid product or operator");
+
+      const { error } = await supabase.from("sales").insert([
+        {
+          product_id: product.id,
+          product_name: product.name,
+          quantity: parseFloat(formData.quantity),
+          total: parseFloat(formData.total),
+          operator_id: operator.id,
+          operator_name: operator.username || "",
+          date: formData.date ? new Date(formData.date).toISOString() : new Date().toISOString()
+        }
+      ]);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Sale recorded" });
+      setIsOpen(false);
+      setForm({
+        product_id: "",
+        quantity: "",
+        total: "",
+        operator_id: "",
+        date: "",
+      });
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+    },
+    onError: err => {
+      toast({ title: "Failed to add sale", description: String(err) });
+    }
+  });
+
+  // Delete sale mutation
+  const deleteSaleMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("sales").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Sale deleted" });
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+    },
+    onError: err => {
+      toast({ title: "Failed to delete sale", description: String(err) });
+    }
+  });
+
   // Handle Sale Add
   const handleAddSale = () => {
-    if (!form.productId || !form.quantity || !form.total || !form.operator || !form.date) {
+    if (!form.product_id || !form.quantity || !form.total || !form.operator_id || !form.date) {
       toast({ title: "Incomplete fields", description: "Please fill in all sale details." });
       return;
     }
-    const prod = MOCK_PRODUCTS.find(p => p.id === Number(form.productId));
-    if (!prod) {
-      toast({ title: "Invalid product!" });
-      return;
-    }
-    const newSale: Sale = {
-      id: Math.max(...sales.map(s => s.id)) + 1,
-      productId: Number(form.productId),
-      productName: prod.name,
-      quantity: parseFloat(form.quantity),
-      total: parseFloat(form.total),
-      operator: form.operator,
-      date: form.date
-    };
-    setSales(prev => [newSale, ...prev]);
-    setForm({
-      productId: "",
-      quantity: "",
-      total: "",
-      operator: "",
-      date: "",
-    });
-    setIsOpen(false);
-    toast({ title: "Sale recorded" });
+    addSaleMutation.mutate(form);
   };
 
   // Handle Sale Delete
-  const handleDeleteSale = (id: number) => {
-    setSales(prev => prev.filter(s => s.id !== id));
-    toast({ title: "Sale deleted" });
+  const handleDeleteSale = (id: string) => {
+    deleteSaleMutation.mutate(id);
   };
 
   return (
@@ -120,13 +187,14 @@ export default function AdminSales() {
                 <div>
                   <label className="block text-sm font-medium mb-1">Product</label>
                   <select
-                    name="productId"
-                    value={form.productId}
+                    name="product_id"
+                    value={form.product_id}
                     onChange={handleFormChange}
                     className="w-full border rounded p-2"
+                    disabled={productsLoading}
                   >
                     <option value="">Select</option>
-                    {MOCK_PRODUCTS.map((p) => (
+                    {products.map((p) => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </select>
@@ -142,14 +210,15 @@ export default function AdminSales() {
                 <div>
                   <label className="block text-sm font-medium mb-1">Operator</label>
                   <select
-                    name="operator"
-                    value={form.operator}
+                    name="operator_id"
+                    value={form.operator_id}
                     onChange={handleFormChange}
                     className="w-full border rounded p-2"
+                    disabled={operatorsLoading}
                   >
                     <option value="">Select</option>
-                    {MOCK_OPERATORS.map((op) => (
-                      <option key={op.id} value={op.name}>{op.name}</option>
+                    {operators.map((op) => (
+                      <option key={op.id} value={op.id}>{op.username}</option>
                     ))}
                   </select>
                 </div>
@@ -158,7 +227,7 @@ export default function AdminSales() {
                   <Input name="date" type="datetime-local" value={form.date} onChange={handleFormChange} />
                 </div>
                 <DialogFooter className="mt-4">
-                  <Button type="submit">Add Sale</Button>
+                  <Button type="submit" disabled={addSaleMutation.isPending}>Add Sale</Button>
                   <DialogClose asChild>
                     <Button type="button" variant="secondary">Cancel</Button>
                   </DialogClose>
@@ -168,32 +237,37 @@ export default function AdminSales() {
           </Dialog>
         </div>
         <div className="bg-white rounded-lg shadow p-6 overflow-x-auto">
-          <table className="w-full border rounded-md overflow-hidden bg-white">
-            <thead className="bg-emerald-50">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700 text-sm">Date/Time</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700 text-sm">Product</th>
-                <th className="px-3 py-2 text-right font-semibold text-gray-700 text-sm">Qty</th>
-                <th className="px-3 py-2 text-right font-semibold text-gray-700 text-sm">Total</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-700 text-sm">Operator</th>
-                <th className="px-3 py-2 text-center font-semibold text-gray-600 text-sm">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sales.length === 0 ? (
+          {salesLoading ? (
+            <div className="py-10 text-center text-gray-400">Loading sales...</div>
+          ) : salesError ? (
+            <div className="py-10 text-center text-red-500">
+              Could not fetch sales.<br />
+              <span className="text-xs">{String(salesError)}</span>
+            </div>
+          ) : sales.length === 0 ? (
+            <div className="px-3 py-8 italic text-gray-400 text-center">
+              No sales records.
+            </div>
+          ) : (
+            <table className="w-full border rounded-md overflow-hidden bg-white">
+              <thead className="bg-emerald-50">
                 <tr>
-                  <td className="px-3 py-6 italic text-gray-400 text-center" colSpan={6}>
-                    No sales records.
-                  </td>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700 text-sm">Date/Time</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700 text-sm">Product</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700 text-sm">Qty</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700 text-sm">Total</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700 text-sm">Operator</th>
+                  <th className="px-3 py-2 text-center font-semibold text-gray-600 text-sm">Action</th>
                 </tr>
-              ) : (
-                sales.map((s) => (
+              </thead>
+              <tbody>
+                {sales.map((s) => (
                   <tr key={s.id} className="group">
-                    <td className="px-3 py-2">{s.date}</td>
-                    <td className="px-3 py-2">{s.productName}</td>
+                    <td className="px-3 py-2">{new Date(s.date).toLocaleString()}</td>
+                    <td className="px-3 py-2">{s.product_name}</td>
                     <td className="px-3 py-2 text-right">{s.quantity}</td>
                     <td className="px-3 py-2 text-right">₨{s.total}</td>
-                    <td className="px-3 py-2">{s.operator}</td>
+                    <td className="px-3 py-2">{s.operator_name}</td>
                     <td className="px-3 py-2 text-center">
                       <Button
                         size="icon"
@@ -201,15 +275,16 @@ export default function AdminSales() {
                         className="text-red-600 hover:bg-red-100"
                         onClick={() => handleDeleteSale(s.id)}
                         title="Delete sale"
+                        disabled={deleteSaleMutation.isPending}
                       >
                         <Trash2 size={18} />
                       </Button>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

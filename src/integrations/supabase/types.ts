@@ -63,6 +63,57 @@ export type Database = {
         }
         Relationships: []
       }
+      sales: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          operator_id: string
+          operator_name: string
+          product_id: string
+          product_name: string
+          quantity: number
+          total: number
+        }
+        Insert: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          operator_id: string
+          operator_name: string
+          product_id: string
+          product_name: string
+          quantity: number
+          total: number
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          operator_id?: string
+          operator_name?: string
+          product_id?: string
+          product_name?: string
+          quantity?: number
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
