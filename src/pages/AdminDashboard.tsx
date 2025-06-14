@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import ProductTable from "@/components/ProductTable";
 import SalesTable from "@/components/SalesTable";
@@ -28,10 +27,41 @@ export default function AdminDashboard() {
     (p) => p.stock < p.lowStockThreshold
   );
 
+  // Per-category breakdown (for today's sales only)
+  const categoryStats = useMemo(() => {
+    // Map from productId to category
+    const idToCategory: Record<number, string> = {};
+    products.forEach((p) => { idToCategory[p.id] = p.category; });
+
+    // Aggregate sales for today per-category
+    const categoryAgg: Record<string, { total: number; quantity: number; }> = {};
+    sales.forEach((sale) => {
+      const cat = idToCategory[sale.productId] || "Other";
+      if (!categoryAgg[cat]) categoryAgg[cat] = { total: 0, quantity: 0 };
+      categoryAgg[cat].total += sale.total;
+      categoryAgg[cat].quantity += sale.quantity;
+    });
+    return categoryAgg;
+  }, [sales, products]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-emerald-50 pb-20">
       <MainHeader userRole="admin" />
       <div className="max-w-6xl mx-auto px-4 pt-10">
+        {/* Per-category sales summary */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+          {Object.entries(categoryStats).map(([category, stat]) => (
+            <div
+              key={category}
+              className="flex flex-col items-start p-4 rounded-xl shadow border bg-white"
+            >
+              <span className="text-md font-semibold text-gray-500">{category}</span>
+              <span className="text-lg font-bold text-emerald-700">
+                ₨{stat.total.toLocaleString()} &middot; {stat.quantity} units
+              </span>
+            </div>
+          ))}
+        </div>
         <div className="flex flex-wrap gap-6 mb-8">
           <div className="flex-1 rounded-xl shadow-md border border-gray-100 p-6 bg-white min-w-[230px]">
             <div className="text-gray-600 font-medium">Total Sales (Today)</div>
@@ -60,4 +90,3 @@ export default function AdminDashboard() {
     </div>
   );
 }
-

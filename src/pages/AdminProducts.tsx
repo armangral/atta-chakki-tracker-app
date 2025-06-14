@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Plus, Edit, Trash2, Search } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import {
   Dialog,
@@ -65,6 +65,20 @@ export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
+
+  // State for search input
+  const [search, setSearch] = useState("");
+
+  // Filtered product list
+  const filteredProducts = useMemo(() => {
+    if (!search.trim()) return products;
+    const term = search.trim().toLowerCase();
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(term) ||
+        p.category.toLowerCase().includes(term)
+    );
+  }, [search, products]);
 
   // Form state for Add/Edit
   const [form, setForm] = useState<Omit<Product, "id">>({
@@ -163,14 +177,29 @@ export default function AdminProducts() {
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-emerald-50 pb-20">
       <div className="max-w-5xl mx-auto px-4 py-10">
         <BackButton />
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
           <div className="text-2xl font-black tracking-wide text-amber-700">
             Product Management
           </div>
-          <Button onClick={handleAdd} className="gap-2" variant="outline">
-            <Plus className="w-4 h-4" />
-            Add Product
-          </Button>
+          <div className="flex gap-2 items-center w-full sm:w-auto">
+            <div className="relative w-full sm:w-64">
+              <Input
+                type="text"
+                placeholder="Search products…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 pr-3 bg-white shadow border focus:ring-amber-400 focus:border-amber-500"
+              />
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                size={18}
+              />
+            </div>
+            <Button onClick={handleAdd} className="gap-2 whitespace-nowrap" variant="outline">
+              <Plus className="w-4 h-4" />
+              Add Product
+            </Button>
+          </div>
         </div>
         <div className="bg-white rounded-xl shadow-md border border-gray-100">
           <Table>
@@ -187,7 +216,7 @@ export default function AdminProducts() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((p) => (
+              {filteredProducts.map((p) => (
                 <TableRow key={p.id} className={p.status === "inactive" ? "opacity-60" : ""}>
                   <TableCell>
                     <span className={`font-semibold ${p.stock < p.lowStockThreshold ? "text-red-600" : ""}`}>
