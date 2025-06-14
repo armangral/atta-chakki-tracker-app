@@ -1,10 +1,10 @@
-
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import BackButton from "@/components/BackButton";
 
 const MOCK_PRODUCTS = [
   { id: 1, name: "Sharbati Wheat Atta" },
@@ -91,6 +91,7 @@ export default function AdminSales() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-emerald-50 pb-20">
       <div className="max-w-6xl mx-auto px-4 pt-10">
+        <BackButton />
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
           <div>
             <div className="text-2xl font-bold text-gray-800 mb-1">Sales Management</div>

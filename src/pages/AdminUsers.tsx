@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import {
   Dialog,
@@ -16,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import MainHeader from "@/components/Layout/MainHeader";
 import { User, UserPlus, User2, UserX } from "lucide-react";
+import BackButton from "@/components/BackButton";
 
 type UserRole = "admin" | "operator";
 type UserStatus = "active" | "inactive";
@@ -94,6 +94,7 @@ export default function AdminUsers() {
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-emerald-50">
       <MainHeader userRole="admin" />
       <div className="max-w-3xl mx-auto px-4 pt-12">
+        <BackButton />
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-amber-900 flex items-center gap-2"><User2 /> Users</h1>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

@@ -1,6 +1,6 @@
-
 import { useState } from "react";
 import { Plus, Edit, Trash2 } from "lucide-react";
+import BackButton from "@/components/BackButton";
 import {
   Dialog,
   DialogTrigger,
@@ -162,6 +162,7 @@ export default function AdminProducts() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-emerald-50 pb-20">
       <div className="max-w-5xl mx-auto px-4 py-10">
+        <BackButton />
         <div className="flex justify-between items-center mb-8">
           <div className="text-2xl font-black tracking-wide text-amber-700">
             Product Management
