@@ -4,28 +4,38 @@ import { Book, CalendarDays, ArrowUp, ArrowDown, Search } from "lucide-react";
 const Index = () => {
   const navigate = useNavigate();
 
-  // Helper to decide admin button routing (checks auth+admin role)
-  async function handleAdminClick() {
-    // Check if user is logged in
+  // Reused: Checks role and routes as appropriate.
+  async function handleGetStartedClick() {
     const { data: { session } } = await import('@/integrations/supabase/client').then(m => m.supabase.auth.getSession());
     if (!session) {
       navigate("/login");
       return;
     }
-    // Check if has admin role
     const supabase = (await import('@/integrations/supabase/client')).supabase;
-    const { data, error } = await supabase
+    // Try admin role first
+    const { data: adminData, error: adminErr } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", session.user.id)
       .eq("role", "admin")
       .single();
-    if (!error && data && data.role === "admin") {
+    if (!adminErr && adminData && adminData.role === "admin") {
       navigate("/admin");
-    } else {
-      // Not an admin — send to login (or show message)
-      navigate("/login");
+      return;
     }
+    // Try operator role next
+    const { data: operatorData, error: operatorErr } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", session.user.id)
+      .eq("role", "operator")
+      .single();
+    if (!operatorErr && operatorData && operatorData.role === "operator") {
+      navigate("/pos");
+      return;
+    }
+    // Otherwise, send to login
+    navigate("/login");
   }
 
   return (
@@ -39,18 +49,12 @@ const Index = () => {
           <span className="text-amber-900 font-medium">Admin: </span>Manage all products, stock, and staff.<br />
           <span className="text-emerald-700 font-medium">Operator: </span>Record sales seamlessly—no paperwork.
         </p>
-        <div className="flex flex-col md:flex-row gap-6 mb-8">
+        <div className="flex justify-center w-full mb-8">
           <button
-            onClick={handleAdminClick}
-            className="flex items-center gap-3 px-6 py-3 rounded-lg bg-amber-600 text-white font-semibold text-lg shadow-md hover:bg-amber-700 transition focus:ring-2 ring-amber-400"
+            onClick={handleGetStartedClick}
+            className="flex items-center gap-3 px-8 py-4 rounded-lg bg-amber-600 text-white font-semibold text-xl shadow-lg hover:bg-amber-700 transition focus:ring-2 ring-amber-400 animate-fade-in"
           >
-            <Book size={24} /> Admin Panel
-          </button>
-          <button
-            onClick={() => navigate("/pos")}
-            className="flex items-center gap-3 px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold text-lg shadow-md hover:bg-emerald-700 transition focus:ring-2 ring-emerald-400"
-          >
-            <CalendarDays size={24} /> Operator POS
+            GET STARTED
           </button>
         </div>
         <div className="w-full grid md:grid-cols-3 gap-6 mt-8">
