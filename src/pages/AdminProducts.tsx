@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+
+import { useState, useMemo, useEffect } from "react";
 import { Plus, Edit, Trash2, Search } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import MainHeader from "@/components/Layout/MainHeader";
@@ -15,60 +16,70 @@ import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/sonner";
+import { TablesInsert, Tables } from "@/integrations/supabase/types";
 
+// Product type from Supabase (id is uuid)
 type Product = {
-  id: number;
+  id: string;
   name: string;
   category: string;
   unit: string;
   price: number;
   stock: number;
-  lowStockThreshold: number;
+  low_stock_threshold: number;
   status: "active" | "inactive";
+  created_at?: string | null;
+  updated_at?: string | null;
 };
-
-const initialProducts: Product[] = [
-  {
-    id: 1,
-    name: "Sharbati Wheat Atta",
-    category: "Flour",
-    unit: "Kg",
-    price: 42,
-    stock: 14,
-    lowStockThreshold: 15,
-    status: "active",
-  },
-  {
-    id: 2,
-    name: "Besan",
-    category: "Flour",
-    unit: "Kg",
-    price: 80,
-    stock: 40,
-    lowStockThreshold: 10,
-    status: "active",
-  },
-  {
-    id: 3,
-    name: "Turmeric Powder",
-    category: "Spices",
-    unit: "Kg",
-    price: 310,
-    stock: 5,
-    lowStockThreshold: 8,
-    status: "inactive",
-  },
-];
 
 const unitOptions = ["Kg", "Gm", "Quintal", "Litre", "Unit"];
 
 export default function AdminProducts() {
-  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
+  const [form, setForm] = useState<Omit<Product, "id">>({
+    name: "",
+    category: "",
+    unit: "Kg",
+    price: 0,
+    stock: 0,
+    low_stock_threshold: 1,
+    status: "active",
+  });
 
   // State for search input
   const [search, setSearch] = useState("");
+
+  // Fetch all products on mount
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  async function fetchProducts() {
+    setLoading(true);
+    setError(null);
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) {
+      setError("Could not load products: " + error.message);
+    } else {
+      // Map status/low_stock_threshold
+      const mapped = (data ?? []).map((p) => ({
+        ...p,
+        // status is TEXT but must always be "active" or "inactive"
+        status: p.status === "active" ? "active" : "inactive",
+      })) as Product[];
+      setProducts(mapped);
+    }
+    setLoading(false);
+  }
 
   // Filtered product list
   const filteredProducts = useMemo(() => {
@@ -81,17 +92,6 @@ export default function AdminProducts() {
     );
   }, [search, products]);
 
-  // Form state for Add/Edit
-  const [form, setForm] = useState<Omit<Product, "id">>({
-    name: "",
-    category: "",
-    unit: "Kg",
-    price: 0,
-    stock: 0,
-    lowStockThreshold: 1,
-    status: "active",
-  });
-
   // Handle input changes
   function handleFormChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -100,7 +100,7 @@ export default function AdminProducts() {
     setForm((prev) => ({
       ...prev,
       [name]:
-        type === "number"
+        type === "number" || name === "price" || name === "stock" || name === "low_stock_threshold"
           ? Number(value)
           : name === "status"
           ? (value as "active" | "inactive")
@@ -117,7 +117,7 @@ export default function AdminProducts() {
       unit: "Kg",
       price: 0,
       stock: 0,
-      lowStockThreshold: 1,
+      low_stock_threshold: 1,
       status: "active",
     });
     setDialogOpen(true);
@@ -126,51 +126,85 @@ export default function AdminProducts() {
   // Open edit product dialog
   function handleEdit(product: Product) {
     setEditProduct(product);
-    setForm({ ...product });
+    setForm({
+      name: product.name,
+      category: product.category,
+      unit: product.unit,
+      price: product.price,
+      stock: product.stock,
+      low_stock_threshold: product.low_stock_threshold,
+      status: product.status,
+    });
     setDialogOpen(true);
   }
 
   // Submit add/edit form
-  function handleFormSubmit(e: React.FormEvent) {
+  async function handleFormSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (form.name.trim() === "" || form.category.trim() === "") {
-      alert("Name and Category are required.");
+      toast.error("Name and Category are required.");
       return;
     }
-    if (form.price <= 0 || form.stock < 0 || form.lowStockThreshold < 0) {
-      alert("Invalid price, stock or threshold value.");
+    if (form.price <= 0 || form.stock < 0 || form.low_stock_threshold < 0) {
+      toast.error("Invalid price, stock or threshold value.");
       return;
     }
     if (editProduct) {
-      // Edit
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === editProduct.id
-            ? { ...p, ...form }
-            : p
-        )
-      );
+      // Edit product in DB
+      const { error } = await supabase
+        .from("products")
+        .update({
+          ...form,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", editProduct.id);
+      if (error) {
+        toast.error("Failed to update product: " + error.message);
+      } else {
+        toast.success("Product updated!");
+        setDialogOpen(false);
+        fetchProducts();
+      }
     } else {
       // Add
-      setProducts((prev) => [
-        ...prev,
-        {
-          ...form,
-          id: prev.length ? Math.max(...prev.map((p) => p.id)) + 1 : 1,
-        },
-      ]);
+      const { data, error } = await supabase
+        .from("products")
+        .insert([
+          {
+            ...form,
+            status: form.status,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ])
+        .select(); // So we can get the new id
+      if (error) {
+        toast.error("Failed to add product: " + error.message);
+      } else {
+        toast.success("Product added!");
+        setDialogOpen(false);
+        fetchProducts();
+      }
     }
-    setDialogOpen(false);
   }
 
   // Handle delete product
-  function handleDelete(product: Product) {
+  async function handleDelete(product: Product) {
     if (
       window.confirm(
         `Are you sure you want to delete the product "${product.name}"?`
       )
     ) {
-      setProducts((prev) => prev.filter((p) => p.id !== product.id));
+      const { error } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", product.id);
+      if (error) {
+        toast.error("Failed to delete product: " + error.message);
+      } else {
+        toast.success("Product deleted.");
+        fetchProducts();
+      }
     }
   }
 
@@ -203,58 +237,78 @@ export default function AdminProducts() {
             </Button>
           </div>
         </div>
-        <div className="bg-white rounded-xl shadow-md border border-gray-100">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Unit</TableHead>
-                <TableHead>Price (₨)</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead>Low Stock Threshold</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredProducts.map((p) => (
-                <TableRow key={p.id} className={p.status === "inactive" ? "opacity-60" : ""}>
-                  <TableCell>
-                    <span className={`font-semibold ${p.stock < p.lowStockThreshold ? "text-red-600" : ""}`}>
-                      {p.name}
-                    </span>
-                  </TableCell>
-                  <TableCell>{p.category}</TableCell>
-                  <TableCell>{p.unit}</TableCell>
-                  <TableCell>₨{p.price}</TableCell>
-                  <TableCell>{p.stock}</TableCell>
-                  <TableCell>{p.lowStockThreshold}</TableCell>
-                  <TableCell>
-                    {p.status === "active" ? (
-                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold">
-                        Active
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-gray-200 text-gray-600 rounded-full text-xs font-bold">
-                        Inactive
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="flex gap-2 justify-center">
-                    <Button variant="outline" size="icon" title="Edit" onClick={() => handleEdit(p)}>
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button variant="destructive" size="icon" title="Delete" onClick={() => handleDelete(p)}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </TableCell>
+
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 min-h-[350px]">
+          {loading && (
+            <div className="w-full py-12 flex justify-center items-center text-gray-500">
+              Loading products...
+            </div>
+          )}
+          {error && (
+            <div className="w-full py-8 flex justify-center text-red-600">{error}</div>
+          )}
+          {!loading && !error && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead>Price (₨)</TableHead>
+                  <TableHead>Stock</TableHead>
+                  <TableHead>Low Stock Threshold</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-center">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredProducts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-gray-400">
+                      No products found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredProducts.map((p) => (
+                    <TableRow key={p.id} className={p.status === "inactive" ? "opacity-60" : ""}>
+                      <TableCell>
+                        <span className={`font-semibold ${p.stock < p.low_stock_threshold ? "text-red-600" : ""}`}>
+                          {p.name}
+                        </span>
+                      </TableCell>
+                      <TableCell>{p.category}</TableCell>
+                      <TableCell>{p.unit}</TableCell>
+                      <TableCell>₨{p.price}</TableCell>
+                      <TableCell>{p.stock}</TableCell>
+                      <TableCell>{p.low_stock_threshold}</TableCell>
+                      <TableCell>
+                        {p.status === "active" ? (
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-gray-200 text-gray-600 rounded-full text-xs font-bold">
+                            Inactive
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="flex gap-2 justify-center">
+                        <Button variant="outline" size="icon" title="Edit" onClick={() => handleEdit(p)}>
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button variant="destructive" size="icon" title="Delete" onClick={() => handleDelete(p)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </div>
       </div>
+
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <form onSubmit={handleFormSubmit}>
@@ -324,13 +378,13 @@ export default function AdminProducts() {
                 />
               </div>
               <div>
-                <Label htmlFor="lowStockThreshold">Low Stock Threshold</Label>
+                <Label htmlFor="low_stock_threshold">Low Stock Threshold</Label>
                 <Input
                   required
-                  id="lowStockThreshold"
-                  name="lowStockThreshold"
+                  id="low_stock_threshold"
+                  name="low_stock_threshold"
                   type="number"
-                  value={form.lowStockThreshold}
+                  value={form.low_stock_threshold}
                   min="0"
                   onChange={handleFormChange}
                 />
