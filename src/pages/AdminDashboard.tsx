@@ -67,7 +67,7 @@ export default function AdminDashboard() {
           </DashboardStatCard>
         </div>
         <div className="mb-10">
-          <SalesChart sales={[]} />
+          <SalesChart sales={salesForTable} />
         </div>
         <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
