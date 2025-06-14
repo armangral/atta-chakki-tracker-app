@@ -3,7 +3,7 @@ import { useState, useMemo, useRef } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import { toast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, Printer } from "lucide-react";
 
 const MOCK_PRODUCTS = [
   { id: 1, name: "Sharbati Wheat Atta", price: 42, stock: 95, unit: "Kg", category: "Flour" },
@@ -30,6 +30,43 @@ export default function OperatorPOS() {
   const [search, setSearch] = useState("");
   const [lastSale, setLastSale] = useState<Sale | null>(null);
   const billRef = useRef<HTMLDivElement>(null);
+
+  // Helper: Generate POS bill HTML string for a given sale
+  const getBillHtml = (sale: Sale) => {
+    const product = products.find(p => p.id === sale.productId);
+    return `
+      <div style="width:210px;margin:0 auto;padding-top:6px;">
+        <div style="text-align:center;">
+          <div style="font-size:20px;font-weight:800;letter-spacing:2px;">Punjab Atta Chakki</div>
+          <div style="font-size:11px;font-weight:400;">Main Street, Punjab</div>
+          <div style="font-size:11px;font-weight:400;">Mob: +92-XXXXXXXXX</div>
+          <div style="margin:8px 0 8px 0;border-bottom:1px dashed #333;">&nbsp;</div>
+          <div style="font-size:12px;margin-bottom:4px;font-weight:500;">Sale Receipt</div>
+        </div>
+        <div style="font-size:14px;font-weight:600;display:flex;justify-content:space-between;">
+            <span>Item</span>
+            <span>Qty</span>
+        </div>
+        <div style="font-size:13px;display:flex;justify-content:space-between;">
+            <span>${sale.productName}</span>
+            <span>${sale.quantity} ${product?.unit}</span>
+        </div>
+        <div style="font-size:12px;margin:5px 0;">
+            Rate: ₨${sale.price.toLocaleString()} x ${sale.quantity} = <b>₨${sale.total.toLocaleString()}</b>
+        </div>
+        <div style="margin:8px 0 8px 0;border-bottom:1px dashed #333;">&nbsp;</div>
+        <div style="font-size:12px;">
+            <b>Date:</b> ${sale.date}
+        </div>
+        <div style="margin-top:12px;text-align:center;font-size:13px;font-weight:700;">
+          Thank You
+        </div>
+        <div style="text-align:center;font-size:11px;font-weight:500;margin-top:6px;">
+          Powered by Punjab Atta Chakki POS
+        </div>
+      </div>
+    `;
+  };
 
   const handleProductClick = (id: number) => {
     setSelected(id);
@@ -78,35 +115,24 @@ export default function OperatorPOS() {
     });
   };
 
-  const handlePrintBill = () => {
-    if (!lastSale) return;
-    // Print only the billRef area
-    const billContents = billRef.current?.innerHTML;
+  // Print bill for any sale (not only last one!)
+  const handlePrintBill = (sale: Sale) => {
+    const billContents = getBillHtml(sale);
     if (!billContents) return;
-    const printWindow = window.open("", "", "width=270,height=550");
+    const printWindow = window.open("", "", "width=275,height=500");
     if (printWindow) {
       printWindow.document.write(`
-      <html>
-        <head>
-          <title>BILL - Punjab Atta Chakki</title>
-          <style>
-            body { margin:0; font-family: 'Courier New', Courier, monospace; width: 260px; }
-            .bill-container { width: 240px; margin: 0 auto; }
-            .center { text-align: center; }
-            .sm { font-size: 12px; }
-            .md { font-size: 15px; }
-            .divider { border-bottom:1px dashed #333; margin:6px 0 8px 0; }
-            .footer { margin-top: 12px; }
-            .bill-table { width:100%; font-size: 14px; }
-            .bill-table th, .bill-table td { padding:4px 0; }
-          </style>
-        </head>
-        <body>
-          <div class="bill-container">
+        <html>
+          <head>
+            <title>BILL - Punjab Atta Chakki</title>
+            <style>
+              body { margin:0; font-family: 'Courier New', Courier, monospace; width: 210px;}
+            </style>
+          </head>
+          <body>
             ${billContents}
-          </div>
-        </body>
-      </html>
+          </body>
+        </html>
       `);
       printWindow.document.close();
       printWindow.focus();
@@ -240,49 +266,14 @@ export default function OperatorPOS() {
           </div>
         )}
 
-        {/* POS Bill + Print Button */}
+        {/* POS Bill + Print Button for last sale */}
         {lastSale && (
           <div className="animate-fade-in mb-8 flex flex-col md:flex-row md:items-center gap-4">
-            <div
-              style={{ display: "none" }}
-              aria-hidden="true"
-              ref={billRef}
-              id="printable-bill"
-            >
-              {/* Printable area */}
-              <div>
-                <div className="center md font-bold">Pujab Atta Chakki</div>
-                <div className="center sm">Main Street, Punjab</div>
-                <div className="center sm">Mob: +92-XXXXXXXXX</div>
-                <div className="divider"></div>
-                <table className="bill-table">
-                  <thead>
-                    <tr>
-                      <th align="left">Product</th>
-                      <th align="right">Qty</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>{lastSale.productName}</td>
-                      <td align="right">{lastSale.quantity} {products.find(p=>p.id===lastSale.productId)?.unit}</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <div className="sm">
-                  Rate: ₨{lastSale.price} x {lastSale.quantity} = ₨{lastSale.total}
-                </div>
-                <div className="divider"></div>
-                <div className="sm">Date: {lastSale.date}</div>
-                <div className="center md font-bold mt-1">Thank You</div>
-                <div className="center sm footer">Powered by Punjab Atta Chakki POS</div>
-              </div>
-            </div>
             <button
-              onClick={handlePrintBill}
-              className="px-6 py-2 rounded-lg bg-amber-500 text-white font-bold text-lg hover:bg-amber-600 transition-shadow"
+              onClick={() => handlePrintBill(lastSale)}
+              className="px-6 py-2 rounded-lg bg-amber-500 text-white font-bold text-lg hover:bg-amber-600 transition-shadow flex items-center gap-2"
             >
-              Print Bill
+              <Printer size={20} /> Print Bill
             </button>
             <span className="text-xs text-muted-foreground">For physical receipt/printer.</span>
           </div>
@@ -301,6 +292,7 @@ export default function OperatorPOS() {
                     <th className="px-3 py-2 text-left font-semibold text-gray-700 text-xs">Category</th>
                     <th className="px-3 py-2 text-right font-semibold text-gray-700 text-xs">Qty</th>
                     <th className="px-3 py-2 text-right font-semibold text-gray-700 text-xs">Total</th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700 text-xs">Bill</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -311,6 +303,15 @@ export default function OperatorPOS() {
                       <td className="px-3 py-2">{sale.category}</td>
                       <td className="px-3 py-2 text-right">{sale.quantity}</td>
                       <td className="px-3 py-2 text-right">₨{sale.total}</td>
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          title="Print Bill"
+                          onClick={() => handlePrintBill(sale)}
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded text-xs font-bold bg-amber-100 text-amber-700 hover:bg-amber-200 transition"
+                        >
+                          <Printer size={16} /> Print
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
