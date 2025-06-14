@@ -1,7 +1,35 @@
-import { Link, useLocation } from "react-router-dom";
+
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { toast } from "@/hooks/use-toast";
+import { LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { cleanupAuthState } from "@/utils/authCleanup";
 
 export default function MainHeader({ userRole }: { userRole: "admin" | "operator" }) {
   const loc = useLocation();
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    try {
+      // Clean up client-side storage
+      cleanupAuthState();
+      // Try a global sign out (in case of multi-tab)
+      try {
+        await supabase.auth.signOut({ scope: 'global' });
+      } catch {
+        // Ignore signout failures – cleanup already happened
+      }
+      toast({ title: "Logged out", description: "You have been successfully logged out." });
+      // Full reload for safety
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 700);
+    } catch (e) {
+      toast({ title: "Logout Error", description: "Failed to log out, please try again." });
+    }
+  }
+
   return (
     <header className="sticky top-0 z-20 bg-amber-100/80 border-b border-gray-200 shadow-sm backdrop-blur mb-8">
       <div className="max-w-6xl mx-auto flex items-center justify-between py-4 px-4">
@@ -22,7 +50,15 @@ export default function MainHeader({ userRole }: { userRole: "admin" | "operator
               <Link to="/pos" className={`font-semibold text-gray-700 px-3 py-1 rounded-lg hover:bg-emerald-200 transition ${loc.pathname === "/pos" ? "bg-emerald-200" : ""}`}>POS</Link>
             </>
           )}
-          <Link to="/" className="font-semibold ml-2 text-gray-500 px-3 py-1 hover:underline underline-offset-2 transition">Logout</Link>
+          {/* Replace Logout link with a button for secure logout */}
+          <Button
+            onClick={handleLogout}
+            variant="ghost"
+            className="font-semibold ml-2 text-gray-500 px-3 py-1 flex items-center gap-2"
+            title="Logout"
+          >
+            <LogOut size={18} /> Logout
+          </Button>
         </nav>
       </div>
     </header>
