@@ -29,7 +29,7 @@ export default function SalesTable({ sales }: { sales: Sale[] }) {
               <td className="px-3 py-2">{s.date}</td>
               <td className="px-3 py-2">{s.productName}</td>
               <td className="px-3 py-2 text-right">{s.quantity}</td>
-              <td className="px-3 py-2 text-right">₹{s.total}</td>
+              <td className="px-3 py-2 text-right">₨{s.total}</td>
               <td className="px-3 py-2">{s.operator}</td>
             </tr>
           ))}

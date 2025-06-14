@@ -34,7 +34,7 @@ export default function AdminDashboard() {
         <div className="flex flex-wrap gap-6 mb-8">
           <div className="flex-1 rounded-xl shadow-md border border-gray-100 p-6 bg-white min-w-[230px]">
             <div className="text-gray-600 font-medium">Total Sales (Today)</div>
-            <div className="text-3xl font-extrabold text-emerald-700 mt-1">₹{todaySales}</div>
+            <div className="text-3xl font-extrabold text-emerald-700 mt-1">₨{todaySales}</div>
           </div>
           <div className="flex-1 rounded-xl shadow-md border border-gray-100 p-6 bg-white min-w-[230px]">
             <div className="text-gray-600 font-medium">Qty Sold (Today)</div>

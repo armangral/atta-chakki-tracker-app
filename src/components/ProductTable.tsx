@@ -8,7 +8,6 @@ type Product = {
   stock: number;
   lowStockThreshold: number;
 };
-
 export default function ProductTable({ products }: { products: Product[] }) {
   return (
     <div>
@@ -29,7 +28,7 @@ export default function ProductTable({ products }: { products: Product[] }) {
               <td className="px-3 py-2 font-semibold">{p.name}</td>
               <td className="px-3 py-2">{p.category}</td>
               <td className="px-3 py-2 text-right">{p.unit}</td>
-              <td className="px-3 py-2 text-right">₹{p.price}</td>
+              <td className="px-3 py-2 text-right">₨{p.price}</td>
               <td className="px-3 py-2 text-right">{p.stock} {p.unit}</td>
             </tr>
           ))}

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import { toast } from "@/hooks/use-toast";
@@ -60,7 +59,7 @@ export default function OperatorPOS() {
               onClick={() => handleProductClick(prod.id)}
             >
               {prod.name}
-              <span className="block text-sm text-gray-500 font-normal">{`₹${prod.price}/${prod.unit}`}</span>
+              <span className="block text-sm text-gray-500 font-normal">{`₨${prod.price}/${prod.unit}`}</span>
               <span className="absolute top-2 right-4 text-xs bg-amber-100 text-amber-700 rounded-full px-2">{prod.stock} {prod.unit}</span>
             </button>
           ))}
@@ -102,13 +101,13 @@ export default function OperatorPOS() {
                     <td className="px-3 py-2">{sale.date}</td>
                     <td className="px-3 py-2">{sale.productName}</td>
                     <td className="px-3 py-2 text-right">{sale.quantity}</td>
-                    <td className="px-3 py-2 text-right">₹{sale.total}</td>
+                    <td className="px-3 py-2 text-right">₨{sale.total}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <div className="text-emerald-600 mt-2">
-              <span className="font-bold">Total: ₹{sales.reduce((a, s) => a + s.total, 0)}</span>
+              <span className="font-bold">Total: ₨{sales.reduce((a, s) => a + s.total, 0)}</span>
             </div>
           </div>
         )}
