@@ -6,12 +6,12 @@ import SalesTable from "@/components/SalesTable";
 import LowStockAlert from "@/components/LowStockAlert";
 import SalesChart from "@/components/SalesChart";
 
-// FIXED: Product type fields and property names match ProductTable AND LowStockAlert definitions
+// Use snake_case everywhere for ProductTable/ProductTableActions compatibility.
+// We'll transform to the prop types required by LowStockAlert below.
 const MOCK_PRODUCTS = [
-  // lowStockThreshold camelCase to match ProductTable + LowStockAlert
-  { id: "1", name: "Sharbati Wheat Atta", category: "Flour", unit: "Kg", price: 42, stock: 14, lowStockThreshold: 15, status: "active" as const },
-  { id: "2", name: "Besan", category: "Flour", unit: "Kg", price: 80, stock: 40, lowStockThreshold: 10, status: "active" as const },
-  { id: "3", name: "Turmeric Powder", category: "Spices", unit: "Kg", price: 310, stock: 5, lowStockThreshold: 8, status: "inactive" as const },
+  { id: "1", name: "Sharbati Wheat Atta", category: "Flour", unit: "Kg", price: 42, stock: 14, low_stock_threshold: 15, status: "active" as const },
+  { id: "2", name: "Besan", category: "Flour", unit: "Kg", price: 80, stock: 40, low_stock_threshold: 10, status: "active" as const },
+  { id: "3", name: "Turmeric Powder", category: "Spices", unit: "Kg", price: 310, stock: 5, low_stock_threshold: 8, status: "inactive" as const },
 ];
 
 const MOCK_SALES = [
@@ -26,9 +26,18 @@ export default function AdminDashboard() {
   const todaySales = sales.reduce((acc, s) => acc + s.total, 0);
   const todayKg = sales.reduce((acc, s) => acc + s.quantity, 0);
 
-  const lowStockProducts = products.filter(
-    (p) => p.stock < p.lowStockThreshold
-  );
+  // ProductTable expects: ... low_stock_threshold ...
+  // LowStockAlert expects: id: number, lowStockThreshold: number, unit, name, stock
+  // We need a derived array for LowStockAlert with correct types.
+  const lowStockProducts = products
+    .filter((p) => p.stock < p.low_stock_threshold)
+    .map((p) => ({
+      id: Number(p.id), // LowStockAlert expects id as number
+      name: p.name,
+      unit: p.unit,
+      stock: p.stock,
+      lowStockThreshold: p.low_stock_threshold,
+    }));
 
   // Per-category breakdown (for today's sales only)
   const categoryStats = useMemo(() => {
