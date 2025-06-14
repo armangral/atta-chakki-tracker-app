@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import { toast } from "@/hooks/use-toast";
@@ -7,41 +8,151 @@ import OperatorProductGrid from "./OperatorProductGrid";
 import OperatorSaleInput from "./OperatorSaleInput";
 import OperatorSalesLog from "./OperatorSalesLog";
 import { getBillHtml } from "./posBillTemplates";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import RequireOperator from "@/components/Auth/RequireOperator";
 
-const MOCK_PRODUCTS = [
-  { id: 1, name: "Sharbati Wheat Atta", price: 42, stock: 95, unit: "Kg", category: "Flour" },
-  { id: 2, name: "Besan", price: 80, stock: 40, unit: "Kg", category: "Flour" },
-  { id: 3, name: "Turmeric Powder", price: 310, stock: 15, unit: "Kg", category: "Spices" },
-  // ... more products
-];
+// Backend types
+type Product = {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
+  unit: string;
+  category: string;
+};
 
-export type Product = typeof MOCK_PRODUCTS[number];
-export type Sale = {
-  productId: number;
-  productName: string;
+type Sale = {
+  id: string;
+  product_id: string;
+  product_name: string;
   quantity: number;
   total: number;
+  operator_id: string;
+  operator_name: string;
   date: string;
-  category: string;
-  price: number;
 };
 
 export default function OperatorPOS() {
-  const [products, setProducts] = useState(MOCK_PRODUCTS);
-  const [selected, setSelected] = useState<number | null>(null);
+  const queryClient = useQueryClient();
+  const [selected, setSelected] = useState<string | null>(null);
   const [quantity, setQuantity] = useState<string>("");
-  const [sales, setSales] = useState<Sale[]>([]);
   const [search, setSearch] = useState("");
   const [lastSale, setLastSale] = useState<Sale | null>(null);
 
-  const handleProductClick = (id: number) => {
+  // Fetch products from Supabase
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id,name,price,stock,unit,category")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      return data as Product[];
+    },
+  });
+
+  // Fetch own sales (recent, current operator's)
+  const { data: sales = [], isLoading: salesLoading } = useQuery({
+    queryKey: ["pos-sales"], // This is for POS log purpose
+    queryFn: async () => {
+      // Fetch current user
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return [];
+      const { data, error } = await supabase
+        .from("sales")
+        .select("*")
+        .eq("operator_id", session.user.id)
+        .order("date", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data as Sale[];
+    },
+  });
+
+  // Sale creation mutation
+  const addSaleMutation = useMutation({
+    mutationFn: async ({ selectedId, qtyVal }: { selectedId: string; qtyVal: number }) => {
+      // Fetch context
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not signed in");
+      const product = products.find((p) => p.id === selectedId);
+      if (!product) throw new Error("Product not found");
+      if (qtyVal > product.stock) throw new Error("Not enough stock");
+      // Get operator's name (from profiles)
+      const { data: profileData } = await supabase.from("profiles").select("username").eq("id", session.user.id).maybeSingle();
+      // Insert sale
+      const { error } = await supabase.from("sales").insert([
+        {
+          product_id: product.id,
+          product_name: product.name,
+          quantity: qtyVal,
+          total: qtyVal * product.price,
+          date: new Date().toISOString(),
+          operator_id: session.user.id,
+          operator_name: profileData?.username ?? "",
+        },
+      ]);
+      if (error) throw error;
+      // Reduce product stock
+      const { error: stockError } = await supabase
+        .from("products")
+        .update({ stock: product.stock - qtyVal })
+        .eq("id", product.id);
+      if (stockError) throw stockError;
+      return {
+        ...product,
+        quantity: qtyVal,
+        total: qtyVal * product.price,
+        date: new Date().toISOString(),
+        operator_id: session.user.id,
+        operator_name: profileData?.username ?? "",
+      };
+    },
+    onSuccess: (_, { selectedId, qtyVal }) => {
+      // Refresh products & sales
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["pos-sales"] });
+      // Set lastSale for Print Bill UI
+      const product = products.find((p) => p.id === selectedId);
+      if (product) {
+        setLastSale({
+          id: "",
+          product_id: product.id,
+          product_name: product.name,
+          quantity: qtyVal,
+          total: qtyVal * product.price,
+          date: new Date().toLocaleString(),
+          operator_id: "", // not used in bill print UI
+          operator_name: "",
+        });
+      }
+      setSelected(null);
+      setQuantity("");
+      toast({
+        title: "Sale recorded!",
+        description: `${product?.name}: ${qtyVal}${product?.unit} sold.`,
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Sale failed",
+        description: String(err?.message ?? err),
+      });
+    },
+  });
+
+  // Handle product selection
+  const handleProductClick = (id: string) => {
     setSelected(id);
     setQuantity("");
   };
 
+  // Confirm sale
   const handleConfirm = () => {
-    const prod = products.find((p) => p.id === selected);
-    if (!prod) return;
+    const product = products.find((p) => p.id === selected);
+    if (!product) return;
     const qtyNum = parseFloat(quantity);
     if (!qtyNum || qtyNum <= 0) {
       toast({
@@ -50,40 +161,28 @@ export default function OperatorPOS() {
       });
       return;
     }
-    if (qtyNum > prod.stock) {
+    if (qtyNum > product.stock) {
       toast({
         title: "Insufficient Stock",
         description: "Not enough stock for this sale.",
       });
       return;
     }
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === prod.id ? { ...p, stock: p.stock - qtyNum } : p
-      )
-    );
-    const sale = {
-      productId: prod.id,
-      productName: prod.name,
-      quantity: qtyNum,
-      total: qtyNum * prod.price,
-      date: new Date().toLocaleString(),
-      category: prod.category,
-      price: prod.price,
-    };
-    setSales([sale, ...sales]);
-    setLastSale(sale);
-    setSelected(null);
-    setQuantity("");
-    toast({
-      title: "Sale recorded!",
-      description: `${prod.name}: ${qtyNum}${prod.unit} sold.`,
-    });
+    addSaleMutation.mutate({ selectedId: product.id, qtyVal: qtyNum });
   };
 
   // Print bill for any sale
   const handlePrintBill = (sale: Sale) => {
-    const billContents = getBillHtml(sale, products);
+    // Re-hydrate product info for bill if needed
+    const product = products.find((p) => p.id === sale.product_id);
+    const saleForBill = {
+      ...sale,
+      productName: sale.product_name,
+      quantity: sale.quantity,
+      price: product?.price ?? 0,
+      category: product?.category ?? "",
+    };
+    const billContents = getBillHtml(saleForBill, products);
     if (!billContents) return;
     const printWindow = window.open("", "", "width=275,height=500");
     if (printWindow) {
@@ -109,7 +208,7 @@ export default function OperatorPOS() {
     }
   };
 
-  // Filtered products logic (used in product grid)
+  // Filtered products logic
   const filteredProducts = !search.trim()
     ? products
     : products.filter((prod) =>
@@ -117,68 +216,71 @@ export default function OperatorPOS() {
       );
 
   return (
-    <div className="min-h-screen bg-gradient-to-r from-emerald-50 via-white to-amber-50 pb-20 flex flex-col">
-      <MainHeader userRole="operator" />
-      <div className="w-full max-w-4xl mx-auto px-4 pt-8 flex-1 flex flex-col">
-        {/* Header and search */}
-        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-emerald-900 mb-2">Quick Sale</h1>
-            <div className="text-base text-muted-foreground">
-              Select a product and confirm sale.
+    <RequireOperator>
+      <div className="min-h-screen bg-gradient-to-r from-emerald-50 via-white to-amber-50 pb-20 flex flex-col">
+        <MainHeader userRole="operator" />
+        <div className="w-full max-w-4xl mx-auto px-4 pt-8 flex-1 flex flex-col">
+          {/* Header and search */}
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-emerald-900 mb-2">Quick Sale</h1>
+              <div className="text-base text-muted-foreground">
+                Select a product and confirm sale.
+              </div>
+            </div>
+            <div className="w-full md:w-96">
+              <div className="relative">
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search products…"
+                  className="pl-10 pr-3 bg-white shadow border focus:ring-emerald-400 focus:border-emerald-500"
+                  autoComplete="off"
+                />
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  size={20}
+                />
+              </div>
             </div>
           </div>
-          <div className="w-full md:w-96">
-            <div className="relative">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search products…"
-                className="pl-10 pr-3 bg-white shadow border focus:ring-emerald-400 focus:border-emerald-500"
-                autoComplete="off"
-              />
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                size={20}
-              />
-            </div>
-          </div>
-        </div>
 
-        {/* Product grid */}
-        <OperatorProductGrid
-          products={filteredProducts}
-          selected={selected}
-          onProductClick={handleProductClick}
-        />
-
-        {/* Selected and quantity */}
-        {selected && (
-          <OperatorSaleInput
-            product={products.find((p) => p.id === selected)!}
-            quantity={quantity}
-            setQuantity={setQuantity}
-            onConfirm={handleConfirm}
+          {/* Product grid */}
+          <OperatorProductGrid
+            products={filteredProducts}
+            selected={selected}
+            onProductClick={handleProductClick}
+            loading={productsLoading}
           />
-        )}
 
-        {/* POS Bill + Print Button for last sale */}
-        {lastSale && (
-          <div className="animate-fade-in mb-8 flex flex-col md:flex-row md:items-center gap-4">
-            <button
-              onClick={() => handlePrintBill(lastSale)}
-              className="px-6 py-2 rounded-lg bg-amber-500 text-white font-bold text-lg hover:bg-amber-600 transition-shadow flex items-center gap-2"
-            >
-              {/* Use <Printer size={20} /> here if needed */}
-              Print Bill
-            </button>
-            <span className="text-xs text-muted-foreground">For physical receipt/printer.</span>
-          </div>
-        )}
+          {/* Selected and quantity */}
+          {selected && (
+            <OperatorSaleInput
+              product={products.find((p) => p.id === selected)!}
+              quantity={quantity}
+              setQuantity={setQuantity}
+              onConfirm={handleConfirm}
+              isSubmitting={addSaleMutation.isPending}
+            />
+          )}
 
-        {/* Sales log table */}
-        <OperatorSalesLog sales={sales} onPrintBill={handlePrintBill} />
+          {/* POS Bill + Print Button for last sale */}
+          {lastSale && (
+            <div className="animate-fade-in mb-8 flex flex-col md:flex-row md:items-center gap-4">
+              <button
+                onClick={() => handlePrintBill(lastSale)}
+                className="px-6 py-2 rounded-lg bg-amber-500 text-white font-bold text-lg hover:bg-amber-600 transition-shadow flex items-center gap-2"
+              >
+                Print Bill
+              </button>
+              <span className="text-xs text-muted-foreground">For physical receipt/printer.</span>
+            </div>
+          )}
+
+          {/* Sales log table */}
+          <OperatorSalesLog sales={sales} onPrintBill={handlePrintBill} loading={salesLoading} />
+        </div>
       </div>
-    </div>
+    </RequireOperator>
   );
 }

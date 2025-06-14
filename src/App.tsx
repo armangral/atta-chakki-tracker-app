@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,6 +12,7 @@ import AdminUsers from "./pages/AdminUsers";
 import AdminSales from "./pages/AdminSales";
 import LoginPage from "./pages/Login";
 import RequireAdmin from "@/components/Auth/RequireAdmin";
+import RequireOperator from "@/components/Auth/RequireOperator";
 
 const queryClient = new QueryClient();
 
@@ -57,7 +57,11 @@ const App = () => (
               </RequireAdmin>
             }
           />
-          <Route path="/pos" element={<OperatorPOS />} />
+          <Route path="/pos" element={
+            <RequireOperator>
+              <OperatorPOS />
+            </RequireOperator>
+          } />
           {/* TODO: Add more routes for products, sales, users if needed */}
           <Route path="*" element={<NotFound />} />
         </Routes>
