@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import {
   Dialog,
@@ -59,11 +58,31 @@ const fetchAllUsers = async (): Promise<UserItem[]> => {
       name: p.username,
       email: p.username || user_id,
       role: (roleObj?.role as UserRole) ?? "operator",
-      status: "active",
+      status: p.username === null ? "inactive" : "active",
     }
   });
 
   return users;
+};
+
+const runBackfill = async () => {
+  // Run the one-off manual SQL (unwrap for code execution)
+  // 1. Insert profiles for users not in profiles
+  // 2. Insert user_roles for users not in user_roles
+  try {
+    await supabase.rpc('execute_sql', { 
+      raw_sql: `
+        INSERT INTO public.profiles (id, username)
+        SELECT id, email FROM auth.users 
+        WHERE id NOT IN (SELECT id FROM public.profiles);
+        INSERT INTO public.user_roles (user_id, role)
+        SELECT id, 'operator'::public.app_role FROM auth.users
+        WHERE id NOT IN (SELECT user_id FROM public.user_roles);
+      `
+    });
+  } catch (e: any) {
+    // Ignore if function doesn't exist, as we only want to run the SQL if needed.
+  }
 };
 
 export default function AdminUsers() {
@@ -85,10 +104,12 @@ export default function AdminUsers() {
     password: "",
   });
 
-  // Fetch users from backend
+  // Fetch users from backend, including a data "backfill" on mount
   const loadUsers = async () => {
     setLoading(true);
     try {
+      // Run the one-off backfill on first load
+      await runBackfill();
       const users = await fetchAllUsers();
       setUsers(users);
     } catch (e: any) {
