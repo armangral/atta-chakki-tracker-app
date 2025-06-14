@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import { toast } from "@/hooks/use-toast";
@@ -6,18 +7,25 @@ import { Search } from "lucide-react";
 import OperatorProductGrid from "./OperatorProductGrid";
 import OperatorSaleInput from "./OperatorSaleInput";
 import OperatorSalesLog from "./OperatorSalesLog";
+import OperatorCart from "./OperatorCart";
 import { getBillHtml } from "./posBillTemplates";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import RequireOperator from "@/components/Auth/RequireOperator";
-import { Product, Sale } from "./operatorPOS.types"; // new
+import { Product, Sale } from "./operatorPOS.types";
+
+export type CartItem = {
+  product: Product;
+  quantity: number;
+};
 
 export default function OperatorPOS() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
   const [quantity, setQuantity] = useState<string>("");
   const [search, setSearch] = useState("");
-  const [lastSale, setLastSale] = useState<Sale | null>(null);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [lastSale, setLastSale] = useState<Sale[] | null>(null); // will hold array of sales
 
   // Fetch products from Supabase
   const { data: products = [], isLoading: productsLoading } = useQuery({
@@ -34,9 +42,8 @@ export default function OperatorPOS() {
 
   // Fetch own sales (recent, current operator's)
   const { data: sales = [], isLoading: salesLoading } = useQuery({
-    queryKey: ["pos-sales"], // This is for POS log purpose
+    queryKey: ["pos-sales"],
     queryFn: async () => {
-      // Fetch current user
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return [];
       const { data, error } = await supabase
@@ -50,68 +57,51 @@ export default function OperatorPOS() {
     },
   });
 
-  // Sale creation mutation
-  const addSaleMutation = useMutation({
-    mutationFn: async ({ selectedId, qtyVal }: { selectedId: string; qtyVal: number }) => {
-      // Fetch context
+  // Sale creation mutation (handles multiple items at checkout)
+  const checkoutMutation = useMutation({
+    mutationFn: async (cartItems: CartItem[]) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not signed in");
-      const product = products.find((p) => p.id === selectedId);
-      if (!product) throw new Error("Product not found");
-      if (qtyVal > product.stock) throw new Error("Not enough stock");
-      // Get operator's name (from profiles)
       const { data: profileData } = await supabase.from("profiles").select("username").eq("id", session.user.id).maybeSingle();
-      // Insert sale
-      const { error } = await supabase.from("sales").insert([
-        {
-          product_id: product.id,
-          product_name: product.name,
-          quantity: qtyVal,
-          total: qtyVal * product.price,
-          date: new Date().toISOString(),
-          operator_id: session.user.id,
-          operator_name: profileData?.username ?? "",
-        },
-      ]);
-      if (error) throw error;
-      // Reduce product stock
-      const { error: stockError } = await supabase
-        .from("products")
-        .update({ stock: product.stock - qtyVal })
-        .eq("id", product.id);
-      if (stockError) throw stockError;
-      return {
-        ...product,
-        quantity: qtyVal,
-        total: qtyVal * product.price,
+      // Validate stock
+      for (const item of cartItems) {
+        const p = products.find((prod) => prod.id === item.product.id);
+        if (!p) throw new Error(`Product not found: ${item.product.name}`);
+        if (item.quantity > p.stock) throw new Error(`Not enough stock for ${p.name}`);
+      }
+      // Insert all sales
+      const salesPayload = cartItems.map((item) => ({
+        product_id: item.product.id,
+        product_name: item.product.name,
+        quantity: item.quantity,
+        total: item.quantity * item.product.price,
         date: new Date().toISOString(),
         operator_id: session.user.id,
         operator_name: profileData?.username ?? "",
-      };
+      }));
+      const { error } = await supabase.from("sales").insert(salesPayload);
+      if (error) throw error;
+      // Reduce stock for each product
+      for (const item of cartItems) {
+        const p = products.find((prod) => prod.id === item.product.id);
+        const { error: stockError } = await supabase
+          .from("products")
+          .update({ stock: p!.stock - item.quantity })
+          .eq("id", item.product.id);
+        if (stockError) throw stockError;
+      }
+      return salesPayload;
     },
-    onSuccess: (_, { selectedId, qtyVal }) => {
-      // Refresh products & sales
+    onSuccess: (salesCreated: Sale[]) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["pos-sales"] });
-      // Set lastSale for Print Bill UI
-      const product = products.find((p) => p.id === selectedId);
-      if (product) {
-        setLastSale({
-          id: "",
-          product_id: product.id,
-          product_name: product.name,
-          quantity: qtyVal,
-          total: qtyVal * product.price,
-          date: new Date().toLocaleString(),
-          operator_id: "", // not used in bill print UI
-          operator_name: "",
-        });
-      }
+      setLastSale(salesCreated);
+      setCart([]);
       setSelected(null);
       setQuantity("");
       toast({
         title: "Sale recorded!",
-        description: `${product?.name}: ${qtyVal}${product?.unit} sold.`,
+        description: "Sale completed and bill ready for print.",
       });
     },
     onError: (err: any) => {
@@ -128,42 +118,59 @@ export default function OperatorPOS() {
     setQuantity("");
   };
 
-  // Confirm sale
-  const handleConfirm = () => {
+  // Add product + quantity to cart
+  const handleAddToCart = () => {
     const product = products.find((p) => p.id === selected);
-    if (!product) return;
     const qtyNum = parseFloat(quantity);
-    if (!qtyNum || qtyNum <= 0) {
-      toast({
-        title: "Invalid Quantity",
-        description: "Please enter a valid quantity.",
-      });
+    if (!product || !qtyNum || qtyNum <= 0) {
+      toast({ title: "Invalid Selection", description: "Please select a valid product and quantity." });
       return;
     }
     if (qtyNum > product.stock) {
-      toast({
-        title: "Insufficient Stock",
-        description: "Not enough stock for this sale.",
-      });
+      toast({ title: "Insufficient Stock", description: "Not enough stock for this sale." });
       return;
     }
-    addSaleMutation.mutate({ selectedId: product.id, qtyVal: qtyNum });
+    // If already in cart, update quantity, else add new
+    setCart((prev) => {
+      const idx = prev.findIndex((item) => item.product.id === product.id);
+      if (idx !== -1) {
+        // Replace old quantity
+        const updatedCart = [...prev];
+        updatedCart[idx] = { product, quantity: qtyNum };
+        return updatedCart;
+      }
+      return [...prev, { product, quantity: qtyNum }];
+    });
+    setSelected(null);
+    setQuantity("");
   };
 
-  // Print bill for any sale
-  const handlePrintBill = (sale: Sale) => {
-    // Re-hydrate product info for bill if needed
-    const product = products.find((p) => p.id === sale.product_id);
-    const saleForBill = {
-      ...sale,
-      productName: sale.product_name,
-      quantity: sale.quantity,
-      price: product?.price ?? 0,
-      category: product?.category ?? "",
-    };
-    const billContents = getBillHtml(saleForBill, products);
+  // Remove item from cart
+  const handleRemoveFromCart = (productId: string) => {
+    setCart((prev) => prev.filter((item) => item.product.id !== productId));
+  };
+
+  // Checkout/Confirm Sale for all items in cart
+  const handleCheckout = () => {
+    if (cart.length === 0) {
+      toast({ title: "No items", description: "Cart is empty." });
+      return;
+    }
+    checkoutMutation.mutate(cart);
+  };
+
+  // Print bill for last sale (multi-product)
+  const handlePrintBill = (sales: Sale[] | Sale) => {
+    let itemsToPrint: Sale[];
+    if (Array.isArray(sales)) {
+      itemsToPrint = sales;
+    } else {
+      itemsToPrint = [sales];
+    }
+    // hydrate product info for all items
+    const billContents = getBillHtml(itemsToPrint, products);
     if (!billContents) return;
-    const printWindow = window.open("", "", "width=275,height=500");
+    const printWindow = window.open("", "", "width=275,height=600");
     if (printWindow) {
       printWindow.document.write(`
         <html>
@@ -204,7 +211,7 @@ export default function OperatorPOS() {
             <div>
               <h1 className="text-2xl font-bold text-emerald-900 mb-2">Quick Sale</h1>
               <div className="text-base text-muted-foreground">
-                Select a product and confirm sale.
+                Select products, set quantity, and check out.
               </div>
             </div>
             <div className="w-full md:w-96">
@@ -232,20 +239,31 @@ export default function OperatorPOS() {
             loading={productsLoading}
           />
 
-          {/* Selected and quantity */}
+          {/* Selected product and quantity input */}
           {selected && (
             <OperatorSaleInput
               product={products.find((p) => p.id === selected)!}
               quantity={quantity}
               setQuantity={setQuantity}
-              onConfirm={handleConfirm}
-              isSubmitting={addSaleMutation.isPending}
+              onConfirm={handleAddToCart}
+              isSubmitting={checkoutMutation.isPending}
+              actionLabel="Add To Cart"
             />
           )}
 
-          {/* POS Bill + Print Button for last sale */}
-          {lastSale && (
-            <div className="animate-fade-in mb-8 flex flex-col md:flex-row md:items-center gap-4">
+          {/* Cart */}
+          {cart.length > 0 && (
+            <OperatorCart
+              cart={cart}
+              onRemove={handleRemoveFromCart}
+              onCheckout={handleCheckout}
+              isSubmitting={checkoutMutation.isPending}
+            />
+          )}
+
+          {/* POS Bill + Print Button for last sale (multi-line) */}
+          {lastSale && lastSale.length > 0 && (
+            <div className="animate-fade-in mb-8 flex flex-col md:flex-row md:items-center gap-4 mt-8">
               <button
                 onClick={() => handlePrintBill(lastSale)}
                 className="px-6 py-2 rounded-lg bg-amber-500 text-white font-bold text-lg hover:bg-amber-600 transition-shadow flex items-center gap-2"
@@ -257,7 +275,7 @@ export default function OperatorPOS() {
           )}
 
           {/* Sales log table */}
-          <OperatorSalesLog sales={sales} onPrintBill={handlePrintBill} loading={salesLoading} />
+          <OperatorSalesLog sales={sales} onPrintBill={(sale) => handlePrintBill(sale)} loading={salesLoading} />
         </div>
       </div>
     </RequireOperator>
