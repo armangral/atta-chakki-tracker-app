@@ -1,3 +1,4 @@
+
 import { useState, useMemo } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import ProductTable from "@/components/ProductTable";
@@ -5,10 +6,11 @@ import SalesTable from "@/components/SalesTable";
 import LowStockAlert from "@/components/LowStockAlert";
 import SalesChart from "@/components/SalesChart";
 
+// FIXED: Product type fields and property names match ProductTable definition
 const MOCK_PRODUCTS = [
-  { id: 1, name: "Sharbati Wheat Atta", category: "Flour", unit: "Kg", price: 42, stock: 14, lowStockThreshold: 15 },
-  { id: 2, name: "Besan", category: "Flour", unit: "Kg", price: 80, stock: 40, lowStockThreshold: 10 },
-  { id: 3, name: "Turmeric Powder", category: "Spices", unit: "Kg", price: 310, stock: 5, lowStockThreshold: 8 }
+  { id: "1", name: "Sharbati Wheat Atta", category: "Flour", unit: "Kg", price: 42, stock: 14, low_stock_threshold: 15, status: "active" },
+  { id: "2", name: "Besan", category: "Flour", unit: "Kg", price: 80, stock: 40, low_stock_threshold: 10, status: "active" },
+  { id: "3", name: "Turmeric Powder", category: "Spices", unit: "Kg", price: 310, stock: 5, low_stock_threshold: 8, status: "inactive" },
 ];
 
 const MOCK_SALES = [
@@ -24,19 +26,20 @@ export default function AdminDashboard() {
   const todayKg = sales.reduce((acc, s) => acc + s.quantity, 0);
 
   const lowStockProducts = products.filter(
-    (p) => p.stock < p.lowStockThreshold
+    (p) => p.stock < p.low_stock_threshold
   );
 
   // Per-category breakdown (for today's sales only)
   const categoryStats = useMemo(() => {
     // Map from productId to category
-    const idToCategory: Record<number, string> = {};
+    const idToCategory: Record<string, string> = {};
     products.forEach((p) => { idToCategory[p.id] = p.category; });
 
     // Aggregate sales for today per-category
     const categoryAgg: Record<string, { total: number; quantity: number; }> = {};
     sales.forEach((sale) => {
-      const cat = idToCategory[sale.productId] || "Other";
+      // Sale.productId is number, but idToCategory keys are string
+      const cat = idToCategory[String(sale.productId)] || "Other";
       if (!categoryAgg[cat]) categoryAgg[cat] = { total: 0, quantity: 0 };
       categoryAgg[cat].total += sale.total;
       categoryAgg[cat].quantity += sale.quantity;
@@ -80,7 +83,7 @@ export default function AdminDashboard() {
         </div>
         <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
-            <ProductTable products={products} />
+            <ProductTable products={products} loading={false} error={null} onEdit={() => {}} onDelete={() => {}} />
           </div>
           <div>
             <SalesTable sales={sales} />
