@@ -7,6 +7,9 @@ import SalesChart from "@/components/SalesChart";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/components/ui/sonner";
+// 👇 Import the Sale type as SaleTableRow to avoid collision
+import type { default as SalesTableComponent } from "@/components/SalesTable";
+type SaleTableRow = Parameters<typeof SalesTableComponent>[0]["sales"][number];
 
 // Type definitions matching your database
 type Product = {
@@ -123,7 +126,7 @@ export default function AdminDashboard() {
   }, [todaySalesList, products]);
 
   // 🎯 Map sales fields for SalesTable (for UI table)
-  const salesForTable: SaleForTable[] = sales.map((s) => ({
+  const salesForTable: SaleTableRow[] = sales.map((s) => ({
     id: typeof s.id === "string" ? Math.abs(
       parseInt(s.id.replace(/-/g, "").slice(0, 8), 16)
     ) : Number(s.id),
