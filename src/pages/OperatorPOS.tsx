@@ -1,26 +1,35 @@
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import { toast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 
-// Add categories to products
 const MOCK_PRODUCTS = [
   { id: 1, name: "Sharbati Wheat Atta", price: 42, stock: 95, unit: "Kg", category: "Flour" },
   { id: 2, name: "Besan", price: 80, stock: 40, unit: "Kg", category: "Flour" },
   { id: 3, name: "Turmeric Powder", price: 310, stock: 15, unit: "Kg", category: "Spices" },
-  // Add more products with relevant categories as needed
+  // ... more products
 ];
+
+type Sale = {
+  productId: number;
+  productName: string;
+  quantity: number;
+  total: number;
+  date: string;
+  category: string;
+  price: number;
+};
 
 export default function OperatorPOS() {
   const [products, setProducts] = useState(MOCK_PRODUCTS);
   const [selected, setSelected] = useState<number | null>(null);
   const [quantity, setQuantity] = useState<string>("");
-  const [sales, setSales] = useState<
-    { productId: number; productName: string; quantity: number; total: number; date: string; category: string }[]
-  >([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [search, setSearch] = useState("");
+  const [lastSale, setLastSale] = useState<Sale | null>(null);
+  const billRef = useRef<HTMLDivElement>(null);
 
   const handleProductClick = (id: number) => {
     setSelected(id);
@@ -50,17 +59,17 @@ export default function OperatorPOS() {
         p.id === prod.id ? { ...p, stock: p.stock - qtyNum } : p
       )
     );
-    setSales([
-      {
-        productId: prod.id,
-        productName: prod.name,
-        quantity: qtyNum,
-        total: qtyNum * prod.price,
-        date: new Date().toLocaleString(),
-        category: prod.category,
-      },
-      ...sales,
-    ]);
+    const sale = {
+      productId: prod.id,
+      productName: prod.name,
+      quantity: qtyNum,
+      total: qtyNum * prod.price,
+      date: new Date().toLocaleString(),
+      category: prod.category,
+      price: prod.price,
+    };
+    setSales([sale, ...sales]);
+    setLastSale(sale);
     setSelected(null);
     setQuantity("");
     toast({
@@ -69,7 +78,45 @@ export default function OperatorPOS() {
     });
   };
 
-  // Memoized product filtering for the search bar
+  const handlePrintBill = () => {
+    if (!lastSale) return;
+    // Print only the billRef area
+    const billContents = billRef.current?.innerHTML;
+    if (!billContents) return;
+    const printWindow = window.open("", "", "width=270,height=550");
+    if (printWindow) {
+      printWindow.document.write(`
+      <html>
+        <head>
+          <title>BILL - Punjab Atta Chakki</title>
+          <style>
+            body { margin:0; font-family: 'Courier New', Courier, monospace; width: 260px; }
+            .bill-container { width: 240px; margin: 0 auto; }
+            .center { text-align: center; }
+            .sm { font-size: 12px; }
+            .md { font-size: 15px; }
+            .divider { border-bottom:1px dashed #333; margin:6px 0 8px 0; }
+            .footer { margin-top: 12px; }
+            .bill-table { width:100%; font-size: 14px; }
+            .bill-table th, .bill-table td { padding:4px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="bill-container">
+            ${billContents}
+          </div>
+        </body>
+      </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 150);
+    }
+  };
+
   const filteredProducts = useMemo(() => {
     if (!search.trim()) return products;
     return products.filter((prod) =>
@@ -77,9 +124,7 @@ export default function OperatorPOS() {
     );
   }, [search, products]);
 
-  // Calculate per-category sales stats from the start
   const categoryAggregates = useMemo(() => {
-    // First, collect product categories from the MOCK_PRODUCTS to show all even if 0 sales
     const categories = Array.from(new Set(products.map((p) => p.category)));
     const result: { [category: string]: { totalAmount: number; totalQty: number } } = {};
     for (const cat of categories) {
@@ -192,6 +237,54 @@ export default function OperatorPOS() {
             >
               Confirm Sale
             </button>
+          </div>
+        )}
+
+        {/* POS Bill + Print Button */}
+        {lastSale && (
+          <div className="animate-fade-in mb-8 flex flex-col md:flex-row md:items-center gap-4">
+            <div
+              style={{ display: "none" }}
+              aria-hidden="true"
+              ref={billRef}
+              id="printable-bill"
+            >
+              {/* Printable area */}
+              <div>
+                <div className="center md font-bold">Pujab Atta Chakki</div>
+                <div className="center sm">Main Street, Punjab</div>
+                <div className="center sm">Mob: +92-XXXXXXXXX</div>
+                <div className="divider"></div>
+                <table className="bill-table">
+                  <thead>
+                    <tr>
+                      <th align="left">Product</th>
+                      <th align="right">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>{lastSale.productName}</td>
+                      <td align="right">{lastSale.quantity} {products.find(p=>p.id===lastSale.productId)?.unit}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div className="sm">
+                  Rate: ₨{lastSale.price} x {lastSale.quantity} = ₨{lastSale.total}
+                </div>
+                <div className="divider"></div>
+                <div className="sm">Date: {lastSale.date}</div>
+                <div className="center md font-bold mt-1">Thank You</div>
+                <div className="center sm footer">Powered by Punjab Atta Chakki POS</div>
+              </div>
+            </div>
+            <button
+              onClick={handlePrintBill}
+              className="px-6 py-2 rounded-lg bg-amber-500 text-white font-bold text-lg hover:bg-amber-600 transition-shadow"
+            >
+              Print Bill
+            </button>
+            <span className="text-xs text-muted-foreground">For physical receipt/printer.</span>
           </div>
         )}
 
