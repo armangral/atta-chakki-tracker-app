@@ -1,4 +1,3 @@
-
 import { useMemo, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
@@ -12,7 +11,8 @@ type Sale = {
   quantity: number;
   total: number;
   operator: string;
-  date: string; // format: "YYYY-MM-DD HH:mm"
+  date: string;    // Human-readable
+  dateISO: string; // ISO (machine-readable)
 };
 
 type SalesChartProps = {
@@ -53,11 +53,13 @@ function getBarLabel(periodKey: string, mode: string) {
 export default function SalesChart({ sales }: SalesChartProps) {
   const [mode, setMode] = useState<"month" | "week" | "year">("month");
 
-  // Parse string date to actual Date object
+  // Parse string date to actual Date object using dateISO
   const groupedData = useMemo(() => {
     const group: Record<string, { label: string; total: number; quantity: number }> = {};
     for (const sale of sales) {
-      const d = new Date(sale.date.replace(" ", "T")); // local time
+      // Use sale.dateISO for all date processing
+      const d = sale.dateISO ? new Date(sale.dateISO) : null;
+      if (!d || isNaN(d.getTime())) continue;
       const key = getPeriodKey(d, mode);
       if (!group[key]) {
         group[key] = { label: getBarLabel(key as string, mode), total: 0, quantity: 0 };

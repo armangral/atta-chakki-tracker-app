@@ -1,4 +1,3 @@
-
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -109,21 +108,26 @@ export function useDashboardData() {
     quantity: number;
     total: number;
     operator: string;
-    date: string;
+    date: string;    // Human-readable
+    dateISO: string; // ISO (machine-readable)
   };
-  const salesForTable: SaleTableRow[] = sales.map((s) => ({
-    id: typeof s.id === "string" ? Math.abs(
-      parseInt(s.id.replace(/-/g, "").slice(0, 8), 16)
-    ) : Number(s.id),
-    productId: typeof s.product_id === "string" ? Math.abs(
-      parseInt(s.product_id.replace(/-/g, "").slice(0, 8), 16)
-    ) : Number(s.product_id),
-    productName: s.product_name,
-    quantity: Number(s.quantity),
-    total: Number(s.total),
-    operator: s.operator_name,
-    date: s.date ? new Date(s.date).toLocaleString() : "",
-  }));
+  const salesForTable: SaleTableRow[] = sales.map((s) => {
+    const dateISO = s.date || "";
+    return {
+      id: typeof s.id === "string" ? Math.abs(
+        parseInt(s.id.replace(/-/g, "").slice(0, 8), 16)
+      ) : Number(s.id),
+      productId: typeof s.product_id === "string" ? Math.abs(
+        parseInt(s.product_id.replace(/-/g, "").slice(0, 8), 16)
+      ) : Number(s.product_id),
+      productName: s.product_name,
+      quantity: Number(s.quantity),
+      total: Number(s.total),
+      operator: s.operator_name,
+      date: dateISO ? new Date(dateISO).toLocaleString() : "",
+      dateISO, // original ISO string for chart use
+    };
+  });
 
   return {
     products, productsLoading, productsError,
