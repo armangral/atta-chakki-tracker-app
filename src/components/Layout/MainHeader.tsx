@@ -1,4 +1,3 @@
-
 import { Link, useLocation } from "react-router-dom";
 
 export default function MainHeader({ userRole }: { userRole: "admin" | "operator" }) {
@@ -15,7 +14,7 @@ export default function MainHeader({ userRole }: { userRole: "admin" | "operator
               <Link to="/admin" className={`font-semibold text-gray-700 px-3 py-1 rounded-lg hover:bg-amber-200 transition ${loc.pathname === "/admin" ? "bg-amber-200" : ""}`}>Dashboard</Link>
               <Link to="/admin/products" className={`font-semibold text-gray-700 px-3 py-1 rounded-lg hover:bg-amber-200 transition ${loc.pathname === "/admin/products" ? "bg-amber-200" : ""}`}>Products</Link>
               <Link to="/admin/sales" className="font-semibold text-gray-700 px-3 py-1 rounded-lg hover:bg-amber-200 transition">Sales Log</Link>
-              <Link to="/admin/users" className="font-semibold text-gray-700 px-3 py-1 rounded-lg hover:bg-amber-200 transition">Users</Link>
+              <Link to="/admin/users" className={`font-semibold text-gray-700 px-3 py-1 rounded-lg hover:bg-amber-200 transition ${loc.pathname === "/admin/users" ? "bg-amber-200" : ""}`}>Users</Link>
             </>
           )}
           {userRole === "operator" && (

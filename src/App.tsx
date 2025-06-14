@@ -8,6 +8,7 @@ import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/AdminDashboard";
 import OperatorPOS from "./pages/OperatorPOS";
 import AdminProducts from "./pages/AdminProducts";
+import AdminUsers from "./pages/AdminUsers";
 
 const queryClient = new QueryClient();
 
@@ -21,6 +22,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/products" element={<AdminProducts />} />
+          <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/pos" element={<OperatorPOS />} />
           {/* TODO: Add more routes for products, sales, users if needed */}
           <Route path="*" element={<NotFound />} />
