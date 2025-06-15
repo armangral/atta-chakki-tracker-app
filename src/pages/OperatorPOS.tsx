@@ -14,6 +14,16 @@ import { supabase } from "@/integrations/supabase/client";
 import RequireOperator from "@/components/Auth/RequireOperator";
 import { Product, Sale } from "./operatorPOS.types";
 
+// Helper to generate a random UUID (frontend only)
+function randomUUID() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  // fallback - not cryptographically secure
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0, v = c == "x" ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 export type CartItem = {
   product: Product;
   quantity: number;
@@ -69,6 +79,9 @@ export default function OperatorPOS() {
         if (!p) throw new Error(`Product not found: ${item.product.name}`);
         if (item.quantity > p.stock) throw new Error(`Not enough stock for ${p.name}`);
       }
+      // Generate a bill UUID for this transaction
+      const billId = randomUUID();
+
       // Insert all sales
       const salesPayload = cartItems.map((item) => ({
         product_id: item.product.id,
@@ -78,6 +91,7 @@ export default function OperatorPOS() {
         date: new Date().toISOString(),
         operator_id: session.user.id,
         operator_name: profileData?.username ?? "",
+        bill_id: billId,
       }));
       const { error } = await supabase.from("sales").insert(salesPayload);
       if (error) throw error;
@@ -275,7 +289,7 @@ export default function OperatorPOS() {
           )}
 
           {/* Sales log table */}
-          <OperatorSalesLog sales={sales} onPrintBill={(sale) => handlePrintBill(sale)} loading={salesLoading} />
+          <OperatorSalesLog sales={sales} onPrintBill={handlePrintBill} loading={salesLoading} />
         </div>
       </div>
     </RequireOperator>

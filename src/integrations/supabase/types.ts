@@ -65,6 +65,7 @@ export type Database = {
       }
       sales: {
         Row: {
+          bill_id: string | null
           created_at: string | null
           date: string
           id: string
@@ -76,6 +77,7 @@ export type Database = {
           total: number
         }
         Insert: {
+          bill_id?: string | null
           created_at?: string | null
           date?: string
           id?: string
@@ -87,6 +89,7 @@ export type Database = {
           total: number
         }
         Update: {
+          bill_id?: string | null
           created_at?: string | null
           date?: string
           id?: string

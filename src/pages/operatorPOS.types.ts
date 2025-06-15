@@ -21,4 +21,5 @@ export type Sale = {
   operator_id: string;
   operator_name: string;
   date: string;
+  bill_id: string | null;
 };
