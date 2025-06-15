@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import { toast } from "@/hooks/use-toast";
@@ -66,6 +65,12 @@ export default function OperatorPOS() {
       return data as Sale[];
     },
   });
+
+  // Filter sales to only today's sales
+  const todayISO = new Date().toISOString().slice(0, 10); // e.g., '2025-06-15'
+  const todaySales = sales.filter(
+    (sale) => sale.date && sale.date.slice(0, 10) === todayISO
+  );
 
   // Sale creation mutation (handles multiple items at checkout)
   const checkoutMutation = useMutation({
@@ -289,7 +294,7 @@ export default function OperatorPOS() {
           )}
 
           {/* Sales log table */}
-          <OperatorSalesLog sales={sales} onPrintBill={handlePrintBill} loading={salesLoading} />
+          <OperatorSalesLog sales={todaySales} onPrintBill={handlePrintBill} loading={salesLoading} />
         </div>
       </div>
     </RequireOperator>
