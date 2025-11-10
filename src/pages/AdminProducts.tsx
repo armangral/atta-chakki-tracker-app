@@ -1,70 +1,41 @@
-
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import BackButton from "@/components/BackButton";
 import MainHeader from "@/components/Layout/MainHeader";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Plus } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/components/ui/sonner";
 import ProductTable from "@/components/ProductTable";
 import ProductFormDialog from "@/components/ProductFormDialog";
-
-// Product type from Supabase
-type Product = {
-  id: string;
-  name: string;
-  category: string;
-  unit: string;
-  price: number;
-  stock: number;
-  low_stock_threshold: number;
-  status: "active" | "inactive";
-  created_at?: string | null;
-  updated_at?: string | null;
-};
+import { useProducts, useDeleteProduct } from "@/hooks/useProducts";
+import { Product, ProductFormData } from "@/types/product";
 
 export default function AdminProducts() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
 
-  // Fetch products
-  async function fetchProducts() {
-    setLoading(true);
-    setError(null);
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) {
-      setError("Could not load products: " + error.message);
-    } else {
-      const mapped = (data ?? []).map((p) => ({
-        ...p,
-        status: p.status === "active" ? "active" : "inactive",
-      })) as Product[];
-      setProducts(mapped);
-    }
-    setLoading(false);
-  }
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  // Fetch products with React Query
+  const { data, isLoading, error } = useProducts({
+    page: 1,
+    page_size: 100,
+    sort_by: "name",
+    sort_order: "asc",
+  });
+
+  const deleteProductMutation = useDeleteProduct();
 
   // Filtered products
   const filteredProducts = useMemo(() => {
-    if (!search.trim()) return products;
+    if (!data?.products) return [];
+    if (!search.trim()) return data.products;
+
     const term = search.trim().toLowerCase();
-    return products.filter(
+    return data.products.filter(
       (p) =>
         p.name.toLowerCase().includes(term) ||
         p.category.toLowerCase().includes(term)
     );
-  }, [search, products]);
+  }, [search, data?.products]);
 
   function handleAdd() {
     setEditProduct(null);
@@ -82,55 +53,7 @@ export default function AdminProducts() {
         `Are you sure you want to delete the product "${product.name}"?`
       )
     ) {
-      const { error } = await supabase
-        .from("products")
-        .delete()
-        .eq("id", product.id);
-      if (error) {
-        toast.error("Failed to delete product: " + error.message);
-      } else {
-        toast.success("Product deleted.");
-        fetchProducts();
-      }
-    }
-  }
-
-  async function handleSubmit(
-    values: Omit<Product, "id" | "created_at" | "updated_at">,
-    isEdit: boolean
-  ) {
-    if (isEdit && editProduct) {
-      const { error } = await supabase
-        .from("products")
-        .update({
-          ...values,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", editProduct.id);
-      if (error) {
-        toast.error("Failed to update product: " + error.message);
-      } else {
-        toast.success("Product updated!");
-        setDialogOpen(false);
-        fetchProducts();
-      }
-    } else {
-      const { error } = await supabase
-        .from("products")
-        .insert([
-          {
-            ...values,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ]);
-      if (error) {
-        toast.error("Failed to add product: " + error.message);
-      } else {
-        toast.success("Product added!");
-        setDialogOpen(false);
-        fetchProducts();
-      }
+      deleteProductMutation.mutate(product.id);
     }
   }
 
@@ -157,15 +80,19 @@ export default function AdminProducts() {
                 size={18}
               />
             </div>
-            <Button onClick={handleAdd} className="gap-2 whitespace-nowrap" variant="outline">
+            <Button
+              onClick={handleAdd}
+              className="gap-2 whitespace-nowrap"
+              variant="outline"
+            >
               <Plus className="w-4 h-4" />
               Add Product
             </Button>
           </div>
         </div>
         <ProductTable
-          loading={loading}
-          error={error}
+          loading={isLoading}
+          error={error ? "Failed to load products" : null}
           products={filteredProducts}
           onEdit={handleEdit}
           onDelete={handleDelete}
@@ -175,7 +102,6 @@ export default function AdminProducts() {
         open={dialogOpen}
         setOpen={setDialogOpen}
         product={editProduct}
-        onSubmit={handleSubmit}
       />
     </div>
   );

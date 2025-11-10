@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import MainHeader from "@/components/Layout/MainHeader";
 import ProductTable from "@/components/ProductTable";
 import SalesTable from "@/components/SalesTable";
@@ -33,7 +32,9 @@ export default function AdminDashboard() {
         {/* Show errors if any */}
         {(productsError || salesError) && (
           <div className="mb-4 text-red-600 bg-red-50 p-3 rounded shadow">
-            {productsError && <div>Products error: {String(productsError)}</div>}
+            {productsError && (
+              <div>Products error: {String(productsError)}</div>
+            )}
             {salesError && <div>Sales error: {String(salesError)}</div>}
           </div>
         )}

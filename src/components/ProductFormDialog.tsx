@@ -1,4 +1,3 @@
-
 import {
   Dialog,
   DialogContent,
@@ -11,44 +10,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
-
-type Product = {
-  id: string;
-  name: string;
-  category: string;
-  unit: string;
-  price: number;
-  stock: number;
-  low_stock_threshold: number;
-  status: "active" | "inactive";
-  created_at?: string | null;
-  updated_at?: string | null;
-};
+import { useCreateProduct, useUpdateProduct } from "@/hooks/useProducts";
+import { Product, ProductFormData } from "@/types/product";
 
 const unitOptions = ["Kg", "Gm", "Quintal", "Litre", "Unit"];
-
-type ProductFormFields = Omit<Product, "id" | "created_at" | "updated_at">;
 
 export default function ProductFormDialog({
   open,
   setOpen,
   product,
-  onSubmit,
 }: {
   open: boolean;
   setOpen: (val: boolean) => void;
   product: Product | null;
-  onSubmit: (values: ProductFormFields, isEdit: boolean) => void;
 }) {
-  const [form, setForm] = useState<ProductFormFields>({
+  const [form, setForm] = useState<ProductFormData>({
     name: "",
     category: "",
     unit: "Kg",
     price: 0,
     stock: 0,
-    low_stock_threshold: 1,
+    low_stock_threshold: 10,
     status: "active",
   });
+
+  const createProductMutation = useCreateProduct();
+  const updateProductMutation = useUpdateProduct();
+
+  const isEdit = !!product;
+  const isLoading =
+    createProductMutation.isPending || updateProductMutation.isPending;
 
   useEffect(() => {
     if (product) {
@@ -56,7 +47,7 @@ export default function ProductFormDialog({
         name: product.name,
         category: product.category,
         unit: product.unit,
-        price: product.price,
+        price: parseFloat(product.price), // Convert string to number
         stock: product.stock,
         low_stock_threshold: product.low_stock_threshold,
         status: product.status,
@@ -68,7 +59,7 @@ export default function ProductFormDialog({
         unit: "Kg",
         price: 0,
         stock: 0,
-        low_stock_threshold: 1,
+        low_stock_threshold: 10,
         status: "active",
       });
     }
@@ -81,7 +72,10 @@ export default function ProductFormDialog({
     setForm((prev) => ({
       ...prev,
       [name]:
-        type === "number" || name === "price" || name === "stock" || name === "low_stock_threshold"
+        type === "number" ||
+        name === "price" ||
+        name === "stock" ||
+        name === "low_stock_threshold"
           ? Number(value)
           : name === "status"
           ? (value as "active" | "inactive")
@@ -89,10 +83,10 @@ export default function ProductFormDialog({
     }));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
     if (form.name.trim() === "" || form.category.trim() === "") {
-      // Prefer using shadcn toast, but fallback to alert for visibility on modal
       alert("Name and Category are required.");
       return;
     }
@@ -100,7 +94,21 @@ export default function ProductFormDialog({
       alert("Invalid price, stock or threshold value.");
       return;
     }
-    onSubmit(form, !!product);
+
+    try {
+      if (isEdit && product) {
+        await updateProductMutation.mutateAsync({
+          id: product.id,
+          data: form,
+        });
+      } else {
+        await createProductMutation.mutateAsync(form);
+      }
+      setOpen(false);
+    } catch (error) {
+      // Error is handled in the mutation hooks
+      console.error("Error submitting form:", error);
+    }
   }
 
   return (
@@ -108,7 +116,7 @@ export default function ProductFormDialog({
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>{product ? "Edit Product" : "Add Product"}</DialogTitle>
+            <DialogTitle>{isEdit ? "Edit Product" : "Add Product"}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 my-6">
             <div>
@@ -120,6 +128,7 @@ export default function ProductFormDialog({
                 value={form.name}
                 onChange={handleFormChange}
                 autoFocus
+                disabled={isLoading}
               />
             </div>
             <div>
@@ -130,6 +139,7 @@ export default function ProductFormDialog({
                 name="category"
                 value={form.category}
                 onChange={handleFormChange}
+                disabled={isLoading}
               />
             </div>
             <div>
@@ -140,6 +150,7 @@ export default function ProductFormDialog({
                 className="w-full border px-3 py-2 rounded-md"
                 value={form.unit}
                 onChange={handleFormChange}
+                disabled={isLoading}
               >
                 {unitOptions.map((u) => (
                   <option key={u} value={u}>
@@ -155,9 +166,11 @@ export default function ProductFormDialog({
                 id="price"
                 name="price"
                 type="number"
+                step="0.01"
                 value={form.price}
-                min="1"
+                min="0.01"
                 onChange={handleFormChange}
+                disabled={isLoading}
               />
             </div>
             <div>
@@ -170,6 +183,7 @@ export default function ProductFormDialog({
                 value={form.stock}
                 min="0"
                 onChange={handleFormChange}
+                disabled={isLoading}
               />
             </div>
             <div>
@@ -182,6 +196,7 @@ export default function ProductFormDialog({
                 value={form.low_stock_threshold}
                 min="0"
                 onChange={handleFormChange}
+                disabled={isLoading}
               />
             </div>
             <div>
@@ -192,6 +207,7 @@ export default function ProductFormDialog({
                 className="w-full border px-3 py-2 rounded-md"
                 value={form.status}
                 onChange={handleFormChange}
+                disabled={isLoading}
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
@@ -199,11 +215,15 @@ export default function ProductFormDialog({
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit" className="w-full">
-              {product ? "Save Changes" : "Add Product"}
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading
+                ? "Saving..."
+                : isEdit
+                ? "Save Changes"
+                : "Add Product"}
             </Button>
             <DialogClose asChild>
-              <Button type="button" variant="outline">
+              <Button type="button" variant="outline" disabled={isLoading}>
                 Cancel
               </Button>
             </DialogClose>

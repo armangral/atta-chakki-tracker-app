@@ -1,92 +1,112 @@
-
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { signInSchema } from "@/schemas/authSchema";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Eye, EyeOff } from "lucide-react"; // Install lucide-react if not already
+import { useState } from "react";
+
+type LoginFormData = z.infer<typeof signInSchema>;
 
 export default function AuthForm() {
-  const [email, setEmail] = useState("");
-  const [pwd, setPwd] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { login, isLoggingIn, loginError } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
-    let ignore = false;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (ignore) return;
-      if (session && session.user?.id) {
-        fetchRoleAndRedirect(session.user.id);
-      }
-    });
-    return () => {
-      ignore = true;
-    };
-  }, []);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(signInSchema),
+    mode: "onBlur",
+  });
 
-  async function fetchRoleAndRedirect(userId: string) {
-    const { data, error } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (data?.role === "admin") {
-      navigate("/admin", { replace: true });
-    } else if (data?.role === "operator") {
-      navigate("/pos", { replace: true });
-    }
-  }
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password: pwd,
-    });
-
-    if (error) {
-      setLoading(false);
-      setError("Login failed: " + error.message);
-      toast.error("Login failed: " + error.message);
-      return;
-    }
-    const session = (await supabase.auth.getSession()).data.session;
-    if (session?.user) {
-      await fetchRoleAndRedirect(session.user.id);
-    }
-    setLoading(false);
-  }
+  const onSubmit = async (data: LoginFormData) => {
+    const result = await login({ email: data.email, password: data.password });
+  };
 
   return (
-    <div className="max-w-md mx-auto bg-white rounded-2xl shadow-2xl p-6 sm:p-10 flex flex-col items-center">
-      <form className="flex flex-col gap-6 w-full" onSubmit={handleLogin}>
-        <div className="text-2xl font-bold mb-2 text-center">Login</div>
-        <Input
-          value={email}
-          type="email"
-          required
-          placeholder="Email"
-          onChange={e => setEmail(e.target.value)}
-        />
-        <Input
-          value={pwd}
-          type="password"
-          required
-          placeholder="Password"
-          onChange={e => setPwd(e.target.value)}
-        />
+    <div className="w-full max-w-md bg-white rounded-2xl shadow-md p-6 sm:p-10">
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
+        <h2 className="text-2xl font-bold text-center text-emerald-800">
+          Welcome Back
+        </h2>
+
+        {/* Email Field */}
+        <div>
+          <Input
+            type="email"
+            placeholder="Email address"
+            autoComplete="email"
+            {...register("email")}
+            className={`transition-colors ${
+              errors.email
+                ? "border-red-500 focus:ring-red-500"
+                : "focus:ring-emerald-500"
+            }`}
+          />
+          {errors.email && (
+            <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+          )}
+        </div>
+
+        {/* Password Field with Eye Toggle */}
+        <div className="relative">
+          <Input
+            type={showPassword ? "text" : "password"}
+            placeholder="Password"
+            autoComplete="current-password"
+            {...register("password")}
+            className={`pr-10 transition-colors ${
+              errors.password
+                ? "border-red-500 focus:ring-red-500"
+                : "focus:ring-emerald-500"
+            }`}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+            tabIndex={-1}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? (
+              <EyeOff className="h-5 w-5" />
+            ) : (
+              <Eye className="h-5 w-5" />
+            )}
+          </button>
+          {errors.password && (
+            <p className="mt-1 text-sm text-red-600">
+              {errors.password.message}
+            </p>
+          )}
+        </div>
+
+        {/* Submit Button */}
         <Button
           type="submit"
-          className="bg-emerald-700 py-3 rounded text-white font-bold text-lg hover:bg-emerald-800"
-          disabled={loading}
+          disabled={isSubmitting || isLoggingIn}
+          className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-lg py-3 rounded-lg disabled:opacity-70 transition-all"
         >
-          {loading ? "Logging in..." : "Login"}
+          {isSubmitting || isLoggingIn ? "Logging in…" : "Login"}
         </Button>
-        {error && <div className="text-red-600 text-center">{error}</div>}
+
+        {/* Forgot Password */}
+        <div className="text-center">
+          <button
+            type="button"
+            onClick={() => navigate("/forgot-password")}
+            className="text-sm text-emerald-700 hover:underline"
+          >
+            Forgot password?
+          </button>
+        </div>
       </form>
     </div>
   );

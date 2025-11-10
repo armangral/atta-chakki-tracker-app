@@ -1,17 +1,13 @@
-
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
 import ProductTableActions from "./ProductTableActions";
-
-type Product = {
-  id: string;
-  name: string;
-  category: string;
-  unit: string;
-  price: number;
-  stock: number;
-  low_stock_threshold: number;
-  status: "active" | "inactive";
-};
+import { Product } from "@/types/product";
 
 export default function ProductTable({
   loading,
@@ -34,7 +30,9 @@ export default function ProductTable({
         </div>
       )}
       {error && (
-        <div className="w-full py-8 flex justify-center text-red-600">{error}</div>
+        <div className="w-full py-8 flex justify-center text-red-600">
+          {error}
+        </div>
       )}
       {!loading && !error && (
         <Table>
@@ -59,16 +57,31 @@ export default function ProductTable({
               </TableRow>
             ) : (
               products.map((p) => (
-                <TableRow key={p.id} className={p.status === "inactive" ? "opacity-60" : ""}>
+                <TableRow
+                  key={p.id}
+                  className={p.status === "inactive" ? "opacity-60" : ""}
+                >
                   <TableCell>
-                    <span className={`font-semibold ${p.stock < p.low_stock_threshold ? "text-red-600" : ""}`}>
+                    <span
+                      className={`font-semibold ${
+                        p.is_low_stock ? "text-red-600" : ""
+                      }`}
+                    >
                       {p.name}
                     </span>
                   </TableCell>
                   <TableCell>{p.category}</TableCell>
                   <TableCell>{p.unit}</TableCell>
-                  <TableCell>₨{p.price}</TableCell>
-                  <TableCell>{p.stock}</TableCell>
+                  <TableCell>₨{parseFloat(p.price).toFixed(2)}</TableCell>
+                  <TableCell>
+                    <span
+                      className={
+                        p.is_low_stock ? "text-red-600 font-semibold" : ""
+                      }
+                    >
+                      {p.stock}
+                    </span>
+                  </TableCell>
                   <TableCell>{p.low_stock_threshold}</TableCell>
                   <TableCell>
                     {p.status === "active" ? (

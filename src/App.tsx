@@ -11,8 +11,8 @@ import AdminProducts from "./pages/AdminProducts";
 import AdminUsers from "./pages/AdminUsers";
 import AdminSales from "./pages/AdminSales";
 import LoginPage from "./pages/Login";
-import RequireAdmin from "@/components/Auth/RequireAdmin";
-import RequireOperator from "@/components/Auth/RequireOperator";
+import AdminProtectedRoute from "@/components/Auth/AdminProtectedRoute";
+import OperatorProtectedRoute from "./components/Auth/OperatorProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -28,40 +28,43 @@ const App = () => (
           <Route
             path="/admin"
             element={
-              <RequireAdmin>
+              <AdminProtectedRoute>
                 <AdminDashboard />
-              </RequireAdmin>
+              </AdminProtectedRoute>
             }
           />
           <Route
             path="/admin/products"
             element={
-              <RequireAdmin>
+              <AdminProtectedRoute>
                 <AdminProducts />
-              </RequireAdmin>
+              </AdminProtectedRoute>
             }
           />
           <Route
             path="/admin/sales"
             element={
-              <RequireAdmin>
+              <AdminProtectedRoute>
                 <AdminSales />
-              </RequireAdmin>
+              </AdminProtectedRoute>
             }
           />
           <Route
             path="/admin/users"
             element={
-              <RequireAdmin>
+              <AdminProtectedRoute>
                 <AdminUsers />
-              </RequireAdmin>
+              </AdminProtectedRoute>
             }
           />
-          <Route path="/pos" element={
-            <RequireOperator>
+          <Route
+            path="/pos"
+            element={
+              // <OperatorProtectedRoute>
               <OperatorPOS />
-            </RequireOperator>
-          } />
+              // </OperatorProtectedRoute>
+            }
+          />
           {/* TODO: Add more routes for products, sales, users if needed */}
           <Route path="*" element={<NotFound />} />
         </Routes>

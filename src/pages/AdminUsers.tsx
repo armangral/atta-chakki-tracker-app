@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import {
   Dialog,
@@ -12,241 +14,294 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import MainHeader from "@/components/Layout/MainHeader";
 import { User, UserPlus, User2, UserX } from "lucide-react";
 import BackButton from "@/components/BackButton";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 
-type UserRole = "admin" | "operator";
-type UserStatus = "active" | "inactive";
+import {
+  useUsers,
+  useUpdateUser,
+  useDeleteUser,
+  useAssignRole,
+  useRevokeRole,
+  useCreateUser,
+} from "@/hooks/useUsers";
+import {
+  UserResponse,
+  UsersListResponse,
+  UserCreateDto,
+  UserAdminUpdateDto,
+  UUID,
+} from "@/services/attachakkiservice";
 
-interface UserItem {
-  id: string;           // uuid
-  email: string;        // from auth.users
-  name: string | null;  // from profiles.username
-  role: UserRole;       // from user_roles
-  status: UserStatus;   // "active"|"inactive" (from profiles or existence)
+type UserRole = "admin" | "operator";
+
+interface UserItem extends UserResponse {
+  status: "active" | "inactive";
+  role: UserRole;
 }
 
-const fetchAllUsers = async (): Promise<UserItem[]> => {
-  // get all users from auth.users via 'profiles' and join 'user_roles'.
-  // profiles may have a nullable username, fallback to email
-  // status is "active" if user still present and not explicitly inactive
-  const { data: profiles, error: profileErr } = await supabase
-    .from("profiles")
-    .select("id,username");
-  if (profileErr) throw new Error(profileErr.message);
-
-  // get roles
-  const { data: roles, error: rolesErr } = await supabase
-    .from("user_roles")
-    .select("user_id, role");
-  if (rolesErr) throw new Error(rolesErr.message);
-
-  // We'll try to get email as username (or fallback to id)
-  const users: UserItem[] = profiles.map((p) => {
-    const user_id = p.id;
-    const roleObj = roles.find(r => r.user_id === user_id);
-    // status: treat as "active" if profile exists
-    return {
-      id: user_id,
-      name: p.username,
-      email: p.username || user_id,
-      role: (roleObj?.role as UserRole) ?? "operator",
-      status: p.username === null ? "inactive" : "active",
-    }
-  });
-
-  return users;
-};
-
 export default function AdminUsers() {
-  const [users, setUsers] = useState<UserItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<{
-    name: string;
-    email: string;
-    role: UserRole;
-    status: UserStatus;
-    password: string;
-  }>({
-    name: "",
+  const [editUser, setEditUser] = useState<UserItem | null>(null);
+
+  const [form, setForm] = useState({
+    username: "",
     email: "",
-    role: "operator",
-    status: "active",
     password: "",
+    role: "operator" as UserRole,
   });
 
-  // Fetch users from backend
-  const loadUsers = async () => {
-    setLoading(true);
-    try {
-      const users = await fetchAllUsers();
-      setUsers(users);
-    } catch (e: any) {
-      toast.error("Failed to fetch users: " + e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ────── Queries & Mutations ──────
+  const {
+    data: listData,
+    isLoading,
+    refetch,
+  } = useUsers({ page: 1, page_size: 20 });
 
-  useEffect(() => { loadUsers(); }, []);
+  const updateUserMutation = useUpdateUser();
+  const deleteUserMutation = useDeleteUser();
+  const assignRoleMutation = useAssignRole();
+  const revokeRoleMutation = useRevokeRole();
+  const createUserMutation = useCreateUser();
 
-  // Open dialog to add a user
-  const handleAdd = () => {
-    setForm({ name: "", email: "", role: "operator", status: "active", password: "" });
-    setEditId(null);
+  // Transform API → UI format
+  const userItems: UserItem[] = (listData?.users ?? []).map((user) => {
+    const isAdmin = user.roles.some((r) => r.role === "admin");
+    return {
+      ...user,
+      status: user.is_active ? "active" : "inactive",
+      role: isAdmin ? "admin" : "operator",
+    };
+  });
+
+  // ────── Dialog helpers ──────
+  const openAdd = () => {
+    setEditUser(null);
+    setForm({ username: "", email: "", password: "", role: "operator" });
     setDialogOpen(true);
   };
 
-  // Open dialog to edit
-  const handleEdit = (user: UserItem) => {
+  const openEdit = (user: UserItem) => {
+    setEditUser(user);
     setForm({
-      name: user.name || "",
+      username: user.profile.username,
       email: user.email,
-      role: user.role,
-      status: user.status,
       password: "",
+      role: user.role,
     });
-    setEditId(user.id);
     setDialogOpen(true);
   };
 
-  // Delete/deactivate user (sets inactive in profile)
-  const handleDelete = async (id: string) => {
-    try {
-      setLoading(true);
-      // Option 1: hard-delete profile (but can't delete auth.users except as admin).
-      // Option 2: set profile.username to null as status "inactive"
-      const { error } = await supabase
-        .from("profiles")
-        .update({ username: null /* null username = inactive */ })
-        .eq("id", id);
-      if (error) throw error;
-      toast.success("User set to inactive.");
-      await loadUsers();
-    } catch (e: any) {
-      toast.error("Failed to set inactive: " + e.message);
-    }
-    setLoading(false);
-  };
-
-  // React controlled input for form
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Handle form submit (add or edit)
-  const handleFormSubmit = async (e: React.FormEvent) => {
+  // ────── Submit ──────
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+
     try {
-      if (editId) {
-        // Edit profile username. (Email cannot be updated unless via Supabase Auth Admin API, so we skip.)
-        const { error: e1 } = await supabase.from("profiles").update({ username: form.name }).eq("id", editId);
-        if (e1) throw e1;
-        // Update role
-        const { data: existingRole } = await supabase.from("user_roles").select("id").eq("user_id", editId).maybeSingle();
-        if (existingRole) {
-          await supabase.from("user_roles").update({ role: form.role }).eq("user_id", editId);
-        } else {
-          await supabase.from("user_roles").insert({ user_id: editId, role: form.role });
+      if (editUser) {
+        // ── UPDATE USER ──
+        const updatePayload: UserAdminUpdateDto = {};
+        if (form.email !== editUser.email) updatePayload.email = form.email;
+        if (form.password) updatePayload.password = form.password;
+
+        if (Object.keys(updatePayload).length > 0) {
+          await updateUserMutation.mutateAsync({
+            id: editUser.id,
+            data: updatePayload,
+          });
         }
-        toast.success("User info updated!");
+
+        // ── ROLE CHANGE ──
+        const targetRole = form.role;
+        const currentRole = editUser.role;
+
+        if (currentRole !== targetRole) {
+          if (currentRole === "admin") {
+            await revokeRoleMutation.mutateAsync({
+              userId: editUser.id,
+              role: "admin",
+            });
+          }
+          if (targetRole === "admin") {
+            await assignRoleMutation.mutateAsync({
+              userId: editUser.id,
+              role: "admin",
+            });
+          }
+        }
+
+        toast.success("User updated successfully!");
       } else {
-        // Register user in Supabase Auth
-        const { data, error } = await supabase.auth.signUp({
+        // ── CREATE USER ──
+        const createPayload: UserCreateDto = {
+          username: form.username,
           email: form.email,
           password: form.password,
-          options: {
-            emailRedirectTo: window.location.origin,
-          }
-        });
-        if (error) throw error;
-        const newUserId = data?.user?.id;
-        if (!newUserId) throw new Error("SignUp failed.");
-        // Insert username in profiles
-        await supabase.from("profiles").upsert([{ id: newUserId, username: form.name }]);
-        // Insert user_roles record
-        await supabase.from("user_roles").insert({ user_id: newUserId, role: form.role });
-        toast.success("User added!");
+        };
+        await createUserMutation.mutateAsync(createPayload);
+        toast.success("User created successfully!");
       }
+
       setDialogOpen(false);
-      await loadUsers();
-    } catch (e: any) {
-      toast.error("Error: " + e.message);
-    } finally {
-      setLoading(false);
+      refetch();
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.detail?.[0]?.msg ||
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Operation failed";
+      toast.error(msg);
+    }
+  };
+
+  // ────── Delete ──────
+  const handleDelete = async (userId: UUID) => {
+    if (!confirm("Delete this user permanently?")) return;
+    try {
+      await deleteUserMutation.mutateAsync(userId);
+      toast.success("User deleted");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Failed to delete");
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-emerald-50">
       <MainHeader userRole="admin" />
-      <div className="max-w-3xl mx-auto px-4 pt-12">
+      <div className="max-w-5xl mx-auto px-4 pt-12">
         <BackButton />
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-amber-900 flex items-center gap-2"><User2 /> Users</h1>
+          <h1 className="text-2xl font-bold text-amber-900 flex items-center gap-2">
+            <User2 className="w-6 h-6" /> Users
+          </h1>
+
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={handleAdd} size="sm" className="bg-amber-600 text-white hover:bg-amber-700">
-                <UserPlus className="mr-2" /> Add User
+              <Button
+                onClick={openAdd}
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700"
+              >
+                <UserPlus className="w-4 h-4 mr-2" /> Add User
               </Button>
             </DialogTrigger>
-            <DialogContent>
-              <form onSubmit={handleFormSubmit} className="space-y-4">
+
+            <DialogContent className="sm:max-w-md">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <DialogHeader>
-                  <DialogTitle>{editId ? "Edit User" : "Add User"}</DialogTitle>
+                  <DialogTitle>
+                    {editUser ? "Edit User" : "Add New User"}
+                  </DialogTitle>
                   <DialogDescription>
-                    {editId ? "Edit user details below." : "Enter details for the new user."}
+                    {editUser
+                      ? "Update user information and role."
+                      : "Fill in the details to create a new user."}
                   </DialogDescription>
                 </DialogHeader>
+
                 <div>
-                  <Label htmlFor="name">Name</Label>
-                  <Input id="name" name="name" required value={form.name} onChange={handleFormChange} />
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    name="username"
+                    required
+                    value={form.username}
+                    onChange={handleChange}
+                  />
                 </div>
+
                 <div>
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" name="email" type="email" required value={form.email} onChange={handleFormChange} disabled={!!editId} />
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required
+                    value={form.email}
+                    onChange={handleChange}
+                    disabled={!!editUser}
+                  />
                 </div>
-                {!editId && (
-                  <div>
-                    <Label htmlFor="password">Password</Label>
-                    <Input id="password" name="password" type="password" required value={form.password} onChange={handleFormChange} />
-                  </div>
-                )}
+
+                <div>
+                  <Label htmlFor="password">
+                    Password {editUser && "(leave blank to keep current)"}
+                  </Label>
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    value={form.password}
+                    onChange={handleChange}
+                    required={!editUser}
+                    placeholder={editUser ? "••••••••" : ""}
+                  />
+                </div>
+
                 <div>
                   <Label htmlFor="role">Role</Label>
-                  <select id="role" name="role" value={form.role} onChange={handleFormChange} className="w-full border rounded-md px-3 py-2">
-                    <option value="admin">Admin</option>
+                  <select
+                    id="role"
+                    name="role"
+                    value={form.role}
+                    onChange={handleChange}
+                    className="w-full border rounded-md px-3 py-2 text-sm"
+                  >
                     <option value="operator">Operator</option>
+                    <option value="admin">Admin</option>
                   </select>
                 </div>
+
                 <DialogFooter className="gap-2">
-                  <Button type="submit" className="bg-emerald-600 text-white hover:bg-emerald-700" disabled={loading}>
-                    {editId ? "Save" : "Add"}
+                  <Button
+                    type="submit"
+                    disabled={
+                      updateUserMutation.isPending ||
+                      createUserMutation.isPending
+                    }
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    {editUser
+                      ? updateUserMutation.isPending
+                        ? "Saving..."
+                        : "Save Changes"
+                      : createUserMutation.isPending
+                      ? "Creating..."
+                      : "Create User"}
                   </Button>
                   <DialogClose asChild>
-                    <Button type="button" variant="outline">Cancel</Button>
+                    <Button type="button" variant="outline">
+                      Cancel
+                    </Button>
                   </DialogClose>
                 </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>
         </div>
-        <div className="bg-white border rounded-xl shadow-lg overflow-x-auto">
+
+        {/* ────── Users Table ────── */}
+        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
+                <TableHead>Username</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
@@ -254,33 +309,63 @@ export default function AdminUsers() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">Loading...</TableCell>
+                  <TableCell colSpan={5} className="text-center py-8">
+                    Loading users...
+                  </TableCell>
+                </TableRow>
+              ) : userItems.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center py-8 text-muted-foreground"
+                  >
+                    No users found.
+                  </TableCell>
                 </TableRow>
               ) : (
-                users.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">No users found.</TableCell>
+                userItems.map((user) => (
+                  <TableRow
+                    key={user.id}
+                    className={user.status === "inactive" ? "opacity-60" : ""}
+                  >
+                    <TableCell className="font-medium">
+                      {user.profile.username}
+                    </TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell className="capitalize">{user.role}</TableCell>
+                    <TableCell className="capitalize">
+                      <span
+                        className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
+                          user.status === "active"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {user.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openEdit(user)}
+                        disabled={user.status === "inactive"}
+                      >
+                        <User className="w-3.5 h-3.5 mr-1" /> Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDelete(user.id)}
+                        disabled={deleteUserMutation.isPending}
+                      >
+                        <UserX className="w-3.5 h-3.5 mr-1" /> Delete
+                      </Button>
+                    </TableCell>
                   </TableRow>
-                ) : (
-                  users.map(user => (
-                    <TableRow key={user.id} className={user.status === "inactive" ? "opacity-50" : ""}>
-                      <TableCell>{user.name || <span className="italic text-xs text-gray-400">No Name</span>}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell className="capitalize">{user.role}</TableCell>
-                      <TableCell className="capitalize">{user.name === null ? "inactive" : "active"}</TableCell>
-                      <TableCell className="flex gap-2 justify-end">
-                        <Button size="sm" variant="outline" onClick={() => handleEdit(user)} disabled={user.status === "inactive"}>
-                          <User className="w-4 h-4 mr-1" /> Edit
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => handleDelete(user.id)} disabled={user.status === "inactive"}>
-                          <UserX className="w-4 h-4 mr-1" /> Deactivate
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )
+                ))
               )}
             </TableBody>
           </Table>
