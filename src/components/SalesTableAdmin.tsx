@@ -42,6 +42,8 @@ const SalesTableAdmin: React.FC<SalesTableAdminProps> = ({
     );
   }
 
+  console.log("sales///", sales);
+
   return (
     <table className="w-full border rounded-md overflow-hidden bg-white">
       <thead className="bg-emerald-50">

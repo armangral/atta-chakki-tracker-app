@@ -19,6 +19,8 @@ export default function AdminDashboard() {
     lowStockProducts,
     categoryStats,
     salesForTable,
+    periodMode, // <-- new
+    setPeriodMode,
   } = useDashboardData();
 
   // Handlers
@@ -68,7 +70,7 @@ export default function AdminDashboard() {
           </DashboardStatCard>
         </div>
         <div className="mb-10">
-          <SalesChart sales={salesForTable} />
+          <SalesChart />{" "}
         </div>
         <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>

@@ -35,7 +35,7 @@ export type SaleTableRow = {
 /* --------------------------------------------------------------- */
 /*  Helper: Convert decimal strings → number                       */
 /* --------------------------------------------------------------- */
-const toNum = (val: string | number): number => {
+export const toNum = (val: string | number): number => {
   return typeof val === "string" ? parseFloat(val) || 0 : val;
 };
 
